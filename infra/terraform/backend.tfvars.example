@@ -1,0 +1,8 @@
+# Copy to backend.tfvars and fill in your AWS account ID.
+# Never commit backend.tfvars to source control.
+
+bucket         = "vdt-terraform-state-<AWS_ACCOUNT_ID>"
+key            = "vdt-mini-project/terraform.tfstate"
+region         = "ap-southeast-1"
+encrypt        = true
+use_lockfile   = true
