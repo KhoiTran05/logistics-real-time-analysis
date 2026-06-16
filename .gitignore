@@ -1,0 +1,29 @@
+.claude
+CLAUDE.md
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+backend.tfvars
+
+_dim_out/
+
+# Python virtual env
+venv/
+.venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# pytest / mypy / misc
+.pytest_cache/
+.mypy_cache/
