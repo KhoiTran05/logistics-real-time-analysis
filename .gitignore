@@ -27,3 +27,5 @@ __pycache__/
 # pytest / mypy / misc
 .pytest_cache/
 .mypy_cache/
+
+_*/

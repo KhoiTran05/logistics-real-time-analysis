@@ -100,7 +100,7 @@ variable "eks_node_groups" {
       instance_types = ["m7i-flex.large"]
       min_size       = 1
       max_size       = 5
-      desired_size   = 1
+      desired_size   = 2
       disk_size_gb   = 60
       capacity_type  = "ON_DEMAND"
       labels         = { "node-type" = "spark" }

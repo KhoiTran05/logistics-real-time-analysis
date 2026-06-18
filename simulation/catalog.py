@@ -16,9 +16,8 @@ from datetime import date, timedelta
 
 SEED = 42
 
-# ── Target scales (per .claude/rules/simulation.md; "~" = approximate) ──────────
 N_DATE_START = date(2018, 1, 1)
-N_DATE_DAYS = 6940           # ~19 years -> dim_date
+N_DATE_DAYS = 6940          
 N_PARTNERS = 50
 N_SERVICE_TYPES = 20
 N_SHIPPERS = 50_000

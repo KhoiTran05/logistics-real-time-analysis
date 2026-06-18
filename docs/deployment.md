@@ -191,53 +191,9 @@ kubectl get pods -n monitoring
 ## Bước 4 — Build và Push Spark Image
 
 ```bash
-AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.ap-southeast-1.amazonaws.com"
-SPARK_IMAGE="${ECR_REGISTRY}/vdt-logistics-dev/spark:3.5.1"
-
-aws ecr get-login-password --region ap-southeast-1 \
-  | docker login --username AWS --password-stdin "${ECR_REGISTRY}"
-
-# Dockerfile cho Spark với Iceberg + MSK IAM Auth
-cat > docker/Dockerfile.spark << 'EOF'
-FROM apache/spark:3.5.1-scala2.12-java17-python3-ubuntu
-
-USER root
-
-# Iceberg runtime + Glue catalog
-ADD https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-spark-runtime-3.5_2.12/1.5.0/iceberg-spark-runtime-3.5_2.12-1.5.0.jar \
-    /opt/spark/jars/
-
-ADD https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-aws-bundle/1.5.0/iceberg-aws-bundle-1.5.0.jar \
-    /opt/spark/jars/
-
-# Spark Kafka connector
-ADD https://repo1.maven.org/maven2/org/apache/spark/spark-sql-kafka-0-10_2.12/3.5.1/spark-sql-kafka-0-10_2.12-3.5.1.jar \
-    /opt/spark/jars/
-
-# ClickHouse JDBC
-ADD https://repo1.maven.org/maven2/com/clickhouse/clickhouse-jdbc/0.6.0/clickhouse-jdbc-0.6.0-all.jar \
-    /opt/spark/jars/
-
-# AWS SDK
-ADD https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.3.4/hadoop-aws-3.3.4.jar \
-    /opt/spark/jars/
-
-ADD https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/1.12.261/aws-java-sdk-bundle-1.12.261.jar \
-    /opt/spark/jars/
-
-COPY spark/ /opt/spark/work-dir/
-RUN pip install --no-cache-dir boto3
-
-USER spark
-EOF
-
-docker build -f docker/Dockerfile.spark -t "${SPARK_IMAGE}" .
-docker push "${SPARK_IMAGE}"
-
 # Upload Spark scripts lên S3
 ARTIFACTS=$(cd infra/terraform && terraform output -raw s3_artifacts_bucket)
-aws s3 sync spark/ "s3://${ARTIFACTS}/spark-scripts/" --exclude "__pycache__/*"
+aws s3 sync src/ "s3://${ARTIFACTS}/src/" --exclude "__pycache__/*"
 ```
 
 ---
@@ -255,6 +211,20 @@ pip install -r simulation/requirements.txt
 
 # Seed Dim tables (chạy MỘT lần) -> s3://${ARTIFACTS}/dim-seed/<table>/<table>.csv
 python simulation/dim_seeder.py --s3-bucket "${ARTIFACTS}"
+
+#
+ICEBERG_BUCKET=$(cd infra/terraform && terraform output -raw s3_iceberg_bucket)
+CHECKPOINTS_BUCKET=$(cd infra/terraform && terraform output -raw s3_checkpoints_bucket)
+SPARK_IMAGE="${AWS_ACCOUNT_ID}.dkr.ecr.ap-southeast-1.amazonaws.com/vdt-logistics-dev/spark:3.5.1"
+
+python -m src.utils.render_application \
+  --app_template_path configs/spark/app-template.yaml \
+  --app_config_path   configs/spark/app-config.yaml \
+  --job_name          dim_tables_create \
+  --target_path       configs/_rendered/dim_tables_create.yaml \
+  --spark_image       "$SPARK_IMAGE" \
+  --iceberg_bucket    "$ICEBERG_BUCKET" \
+  --checkpoints_bucket "$CHECKPOINTS_BUCKET"
 
 # Upload scripts cho EC2 generator (EC2 tự sync s3://.../simulation/ ở mỗi lần start)
 aws s3 sync simulation/ "s3://${ARTIFACTS}/simulation/" --exclude "__pycache__/*"
@@ -285,7 +255,7 @@ kubectl exec -it logistics-kafka-combined-0 -n kafka -- bin/kafka-console-consum
 
 ```bash
 ICEBERG_BUCKET=$(cd infra/terraform && terraform output -raw s3_iceberg_bucket)
-CHECKPOINTS=$(cd infra/terraform && terraform output -raw s3_checkpoints_bucket)
+CHECKPOINTS_BUCKET=$(cd infra/terraform && terraform output -raw s3_checkpoints_bucket)
 ARTIFACTS=$(cd infra/terraform && terraform output -raw s3_artifacts_bucket)
 GLUE_DBS=$(cd infra/terraform && terraform output -json glue_databases)
 
