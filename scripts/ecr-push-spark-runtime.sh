@@ -1,8 +1,11 @@
+#!/bin/bash
+set -euo pipefail
+
 AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.ap-southeast-1.amazonaws.com"
 SPARK_IMAGE="${ECR_REGISTRY}/vdt-logistics-dev/spark:3.5.1"
-SPARK_REPO = "spark"
-
+SPARK_REPO="vdt-logistics-dev/spark"
+REGION="ap-southeast-1"
 
 if ! docker info >/dev/null 2>&1; then
   echo "Docker daemon is not reachable." >&2

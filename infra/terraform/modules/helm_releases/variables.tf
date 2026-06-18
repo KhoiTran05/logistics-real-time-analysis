@@ -22,6 +22,16 @@ variable "spark_irsa_role_arn" {
   type = string
 }
 
+variable "spark_operator_image_repository" {
+  description = "ECR repo for the custom spark-operator image (hadoop-aws baked in)"
+  type        = string
+}
+
+variable "spark_operator_image_tag" {
+  type    = string
+  default = "v1beta2-1.4.6-3.5.0"
+}
+
 variable "airflow_irsa_role_arn" {
   type = string
 }

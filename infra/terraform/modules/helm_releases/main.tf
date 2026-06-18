@@ -64,6 +64,36 @@ resource "kubernetes_service_account" "spark" {
   depends_on = [kubernetes_namespace.namespaces]
 }
 
+resource "kubernetes_role" "spark_driver" {
+  metadata {
+    name      = "spark-driver-role"
+    namespace = "spark"
+  }
+  rule {
+    api_groups = [""]
+    resources  = ["pods", "services", "configmaps", "persistentvolumeclaims"]
+    verbs      = ["get", "list", "watch", "create", "update", "patch", "delete", "deletecollection"]
+  }
+  depends_on = [kubernetes_namespace.namespaces]
+}
+
+resource "kubernetes_role_binding" "spark_driver" {
+  metadata {
+    name      = "spark-driver-rolebinding"
+    namespace = "spark"
+  }
+  role_ref {
+    api_group = "rbac.authorization.k8s.io"
+    kind      = "Role"
+    name      = kubernetes_role.spark_driver.metadata[0].name
+  }
+  subject {
+    kind      = "ServiceAccount"
+    name      = kubernetes_service_account.spark.metadata[0].name
+    namespace = "spark"
+  }
+}
+
 # ── Spark Operator ────────────────────────────────────────────────────────────
 
 resource "helm_release" "spark_operator" {
@@ -74,6 +104,17 @@ resource "helm_release" "spark_operator" {
   namespace        = "spark-operator"
   create_namespace = false
   timeout          = 300
+
+  # Custom operator image with hadoop-aws baked in, so the operator's in-process
+  # spark-submit can resolve the s3a:// mainApplicationFile / pyFiles.
+  set {
+    name  = "image.repository"
+    value = var.spark_operator_image_repository
+  }
+  set {
+    name  = "image.tag"
+    value = var.spark_operator_image_tag
+  }
 
   set {
     name  = "sparkJobNamespace"
@@ -90,6 +131,12 @@ resource "helm_release" "spark_operator" {
   set {
     name  = "serviceAccounts.spark.name"
     value = "spark"
+  }
+  # IRSA for the operator SA: grants the spark-submit subprocess S3 read access to
+  # the artifacts bucket (reuses the spark role, which already has ArtifactsRead).
+  set {
+    name  = "serviceAccounts.sparkoperator.annotations.eks\\.amazonaws\\.com/role-arn"
+    value = var.spark_irsa_role_arn
   }
 
   depends_on = [kubernetes_service_account.spark]

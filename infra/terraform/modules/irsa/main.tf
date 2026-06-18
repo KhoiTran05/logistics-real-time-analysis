@@ -12,7 +12,12 @@ resource "aws_iam_role" "spark" {
       Action    = "sts:AssumeRoleWithWebIdentity"
       Condition = {
         StringEquals = {
-          "${var.oidc_provider_url}:sub" = "system:serviceaccount:${var.spark_namespace}:${var.spark_service_account}"
+          # Both the Spark driver/executor SA and the spark-operator SA assume this
+          # role: the operator's in-process spark-submit reads the s3a:// app file.
+          "${var.oidc_provider_url}:sub" = [
+            "system:serviceaccount:${var.spark_namespace}:${var.spark_service_account}",
+            "system:serviceaccount:${var.spark_operator_namespace}:${var.spark_operator_service_account}",
+          ]
           "${var.oidc_provider_url}:aud" = "sts.amazonaws.com"
         }
       }

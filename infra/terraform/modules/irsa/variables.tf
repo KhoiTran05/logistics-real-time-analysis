@@ -51,6 +51,16 @@ variable "spark_service_account" {
   default = "spark"
 }
 
+variable "spark_operator_namespace" {
+  type    = string
+  default = "spark-operator"
+}
+
+variable "spark_operator_service_account" {
+  type    = string
+  default = "spark-operator"
+}
+
 variable "airflow_namespace" {
   type    = string
   default = "airflow"

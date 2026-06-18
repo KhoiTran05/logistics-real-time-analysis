@@ -8,7 +8,7 @@ spec:
   pythonVersion: "3"
   mode: cluster
   image: "{SPARK_IMAGE}"
-  imagePullPolicy: IfNotPresent
+  imagePullPolicy: Always
   mainApplicationFile: "{MAIN_APPLICATION_FILE}"
   arguments: []
   sparkVersion: 3.5.1
@@ -16,12 +16,10 @@ spec:
   restartPolicy:
     type: Never
 
-  # deps:
-  #   packages:
-  #     - org.apache.hadoop:hadoop-aws:3.3.4
-  #     - com.amazonaws:aws-java-sdk-bundle:1.12.262
-  #     - org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.5.2
-  #     - org.apache.iceberg:iceberg-aws-bundle:1.5.2
+  deps:
+    packages:
+      - org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.5.2
+      - org.apache.iceberg:iceberg-aws-bundle:1.5.2
   hadoopConf:
     fs.s3a.impl: org.apache.hadoop.fs.s3a.S3AFileSystem
     fs.s3a.aws.credentials.provider: com.amazonaws.auth.WebIdentityTokenCredentialsProvider,com.amazonaws.auth.InstanceProfileCredentialsProvider
@@ -47,7 +45,7 @@ spec:
       - key: dedicated
         value: spark
         effect: NoSchedule
-    envVars:
+    env:
       - name: KAFKA_BOOTSTRAP
         value: "logistics-kafka-kafka-bootstrap.kafka.svc.cluster.local:9092"
       - name: ICEBERG_BUCKET

@@ -161,7 +161,24 @@ kubectl get nodes
 
 ---
 
-## Bước 3 — Apply Phase 2: Platform (Helm + Kafka + ClickHouse + Grafana)
+## Bước 2b — Build & Push Spark Operator Image
+
+> **Bắt buộc trước Phase 2.** Spark Operator chạy `spark-submit` ngay trong pod của nó,
+> và ở `mode: cluster` nó resolve `s3a://` mainApplicationFile/pyFiles cục bộ — cần
+> `hadoop-aws` trên classpath của chính operator (image upstream không có). Ta dùng
+> image operator custom (`infra/ecr/Dockerfile.spark-operator`). Image phải có trên ECR
+> **trước khi** Helm release spark-operator deploy ở Phase 2, nếu không pod operator sẽ
+> `ImagePullBackOff`. ECR repo `vdt-logistics-dev/spark-operator` đã được tạo ở Phase 1.
+
+```bash
+cd ../..
+./scripts/ecr-push-spark-operator.sh
+cd infra/terraform
+```
+
+---
+
+## Bước 3 — Apply Phase 2: Platform 
 
 ```bash
 cd infra/terraform
@@ -191,14 +208,18 @@ kubectl get pods -n monitoring
 ## Bước 4 — Build và Push Spark Image
 
 ```bash
-# Upload Spark scripts lên S3
-ARTIFACTS=$(cd infra/terraform && terraform output -raw s3_artifacts_bucket)
-aws s3 sync src/ "s3://${ARTIFACTS}/src/" --exclude "__pycache__/*"
+cd ../..
+
+# Build and push Spark image
+./scripts/ecr-push-spark-runtime.sh
+
+# Upload Spark scripts lên S3 (sync src/ + đóng gói src.zip cho spec.deps.pyFiles)
+./scripts/upload_to_s3.sh
 ```
 
 ---
 
-## Bước 4b — Seed Dim Tables + Upload Generator Scripts
+## Bước 4b — Seed Dim Tables + Run Spark Job (dim_tables_create)
 
 `simulation/catalog.py` là **nguồn ID duy nhất**: cùng dữ liệu được seeder ghi vào Dim tables
 và được event generator dùng để sinh event → mọi event tham chiếu đúng ID có thật trong Dim
@@ -212,7 +233,8 @@ pip install -r simulation/requirements.txt
 # Seed Dim tables (chạy MỘT lần) -> s3://${ARTIFACTS}/dim-seed/<table>/<table>.csv
 python simulation/dim_seeder.py --s3-bucket "${ARTIFACTS}"
 
-#
+# Render Spark Job Application
+AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 ICEBERG_BUCKET=$(cd infra/terraform && terraform output -raw s3_iceberg_bucket)
 CHECKPOINTS_BUCKET=$(cd infra/terraform && terraform output -raw s3_checkpoints_bucket)
 SPARK_IMAGE="${AWS_ACCOUNT_ID}.dkr.ecr.ap-southeast-1.amazonaws.com/vdt-logistics-dev/spark:3.5.1"
@@ -226,6 +248,20 @@ python -m src.utils.render_application \
   --iceberg_bucket    "$ICEBERG_BUCKET" \
   --checkpoints_bucket "$CHECKPOINTS_BUCKET"
 
+# Run Spark Job
+kubectl apply -f configs/_rendered/dim_tables_create.yaml
+
+# Checking Spark Application creating
+kubectl get sparkapplication -n spark
+
+# Checking Spark Job running (Driver and Executor running)
+kubectl get pods -n spark
+```
+---
+
+## Step 4c: Upload Generator Scripts
+
+```bash
 # Upload scripts cho EC2 generator (EC2 tự sync s3://.../simulation/ ở mỗi lần start)
 aws s3 sync simulation/ "s3://${ARTIFACTS}/simulation/" --exclude "__pycache__/*"
 

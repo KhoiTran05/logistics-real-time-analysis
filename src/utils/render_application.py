@@ -60,7 +60,7 @@ def render_application(
     job_config = _load_spark_job_config(app_config_path, job_name)
 
     context = {
-        "SPARK_APP_NAME": job_config.get("name"),
+        "SPARK_APP_NAME": job_config.get("application_name"),
         "SPARK_IMAGE": spark_image,
         "MAIN_APPLICATION_FILE": job_config.get("application_file"),
         "DRIVER_CORES": _deep_get(job_config, "driver", "cores", default=1),
@@ -78,6 +78,10 @@ def render_application(
     application["spec"]["arguments"] = job_config.get("arguments", [])
     application["spec"]["driver"].update(job_config.get("driver", {}))
     application["spec"]["executor"].update(job_config.get("executor", {}))
+
+    py_files = job_config.get("py_files")
+    if py_files:
+        application["spec"]["deps"].update({"pyFiles": py_files})
 
     with Path(target_path).open("w") as f:
         yaml.safe_dump(application, f, sort_keys=False)

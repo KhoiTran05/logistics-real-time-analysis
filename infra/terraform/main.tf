@@ -77,7 +77,7 @@ module "ecr" {
   source = "./modules/ecr"
 
   name_prefix  = local.name_prefix
-  repositories = ["spark", "kafka-producer"]
+  repositories = ["spark", "spark-operator", "kafka-producer"]
 }
 
 module "eks" {
@@ -116,6 +116,7 @@ module "helm_releases" {
 
   name_prefix                      = local.name_prefix
   aws_region                       = var.aws_region
+  spark_operator_image_repository  = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/${local.name_prefix}/spark-operator"
   iceberg_bucket_name              = module.s3.iceberg_bucket_name
   checkpoints_bucket_name          = module.s3.checkpoints_bucket_name
   artifacts_bucket_name            = module.s3.artifacts_bucket_name

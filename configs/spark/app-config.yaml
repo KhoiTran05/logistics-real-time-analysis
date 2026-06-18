@@ -1,6 +1,9 @@
 jobs:
   - name: dim_tables_create
-    application_file: s3a://vdt-logistics-dev-artifacts-265808836917/spark/jobs/dim_tables_create.py
+    application_name: dim-tables-create
+    application_file: s3a://vdt-logistics-dev-artifacts-265808836917/src/jobs/dim_tables_create.py
+    py_files:
+      - s3a://vdt-logistics-dev-artifacts-265808836917/src.zip
     arguments:
       - --source
       - '[
@@ -19,7 +22,6 @@ jobs:
     driver:
       cores: 1
       memory: 1g
-      service_account: spark
     executor:
       cores: 1
       instances: 1
