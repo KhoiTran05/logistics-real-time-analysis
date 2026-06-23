@@ -4,7 +4,7 @@ from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql import functions as F
 
 from src.jobs.streaming.config import MAX_OFFSETS
-from src.utils.ensure_tables import SCHEMA
+from src.jobs.streaming.ensure_tables import SCHEMA
 
 
 def read_kafka(spark: SparkSession, bootstrap: str, topic: str) -> DataFrame:

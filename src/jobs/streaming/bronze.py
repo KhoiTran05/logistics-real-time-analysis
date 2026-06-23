@@ -4,7 +4,7 @@ from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
 
 from src.jobs.streaming.config import CATALOG, TRIGGER_INTERVAL
-from src.utils.ensure_tables import TOPIC_EVENTS, bronze_columns
+from src.jobs.streaming.ensure_tables import TOPIC_EVENTS, bronze_columns
 
 
 def bronze_batch_writer(database: str, topic: str):

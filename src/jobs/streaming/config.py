@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 
-from src.utils.ensure_tables import (
+from src.jobs.streaming.ensure_tables import (
     CATALOG,
     TOPIC_FINANCIAL,
     TOPIC_SHIPMENT,

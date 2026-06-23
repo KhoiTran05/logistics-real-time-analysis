@@ -420,7 +420,7 @@
 | `first_hub_arrived_at` | TIMESTAMP | - | NULL | Time arrived at first hub |
 | `last_hub_departed_at` | TIMESTAMP | - | NULL | Time departed from last hub |
 | `destination_post_office_arrived_at` | TIMESTAMP | - | NULL | Time arrived at destination post office |
-| `out_for_delivery_at` | TIMESTAMP | - | NULL | Time started out for delivery |
+| `dispatched_for_delivery_at` | TIMESTAMP | - | NULL | Time started out for delivery |
 | `delivered_at` | TIMESTAMP | - | NULL | Time of successful delivery |
 | `returned_at` | TIMESTAMP | - | NULL | Time of return |
 | `updated_at` | TIMESTAMP | - | NOT NULL | Last update time |

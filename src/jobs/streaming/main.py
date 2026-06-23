@@ -13,7 +13,7 @@ from src.jobs.streaming.kpi import kpi_batch_writer, start_kpis
 from src.jobs.streaming.session import build_spark
 from src.jobs.streaming.source import parse, read_kafka
 from src.jobs.streaming.transform import build_enriched
-from src.utils.ensure_tables import ensure_bronze_tables
+from src.jobs.streaming.ensure_tables import ensure_bronze_tables
 from src.utils.logger import setup_logger
 
 logger = setup_logger(__name__)
