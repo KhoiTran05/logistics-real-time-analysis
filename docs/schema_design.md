@@ -1,13 +1,6 @@
 # Data Design Schema — Realtime Logistics System
-> **Role:** Data Architect + Logistics Domain Expert  
-> **Simulation Standard:** Viettel Post / GHN / GHTK / J&T  
-> **Processing Model:** Lambda/Kappa Style — Batch Historical + Streaming Events
-
----
 
 ## Assumptions (Business Assumptions)
-
-Before designing, I set the following assumptions based on the reality of postal operations in Vietnam:
 
 1. **Standard Waybill Flow:** Create order → Pickup → Enter sending post office warehouse → Transit (linehaul) → Enter central hub warehouse → Transit → Enter receiving post office warehouse → Delivery → Completed / Returned.
 2. **Geographical Units:** 3 levels — Province/City → District → Ward/Commune. Operational zoning according to 3 regions + 63 provinces.
@@ -627,73 +620,6 @@ Before designing, I set the following assumptions based on the reality of postal
 | Scanner offline at hub → scan is synchronized late | `is_late_arrival = true` in `fact_shipment_route`; Spark watermark 30–60 minutes |
 | Shipper delivers in an area without signal → status update is late | Watermark on `stream_shipment_status_log` set to 4 hours |
 | COD collected but connection lost → Kafka message arrives late | Watermark for `stream_cod_collection` set to 2 hours; use `event_id` as idempotency key |
----
-
-## E. KPI Mapping
-
-### E1. Operational KPIs — Realtime
-
-| KPI | Formula | Table/Field | Window |
-|---|---|---|---|
-| **Volume by post office** | `COUNT(shipment_id)` GROUP BY `facility_id` | `stream_tracking_event` WHERE `event_type = 'shipment_created'` | Tumbling 5 mins / 1 hour |
-| **Volume by branch** | Volume by post office + JOIN `dim_facility.branch_id` | `stream_tracking_event` JOIN `dim_facility` | Tumbling 1 hour |
-| **Realtime revenue** | `SUM(total_fee_vnd)` GROUP BY `branch_id` | `stream_cod_collection` + `fact_revenue` | Tumbling 5 mins |
-| **Realtime COD collected** | `SUM(cod_amount_vnd)` | `stream_cod_collection` | Sliding 1 hour / 5 mins |
-| **Processing order count** | `COUNT` WHERE `current_status NOT IN ('DELIVERED','RETURNED','LOST')` | `fact_shipment` (batch) + stateful streaming | Realtime snapshot |
-| **Hub inventory count** | `SUM(total_shipments)` from latest snapshot | `fact_hub_inventory` + `stream_tracking_event` | Realtime snapshot |
-
----
-
-### E2. Shipment Journey KPIs
-
-| KPI | Formula | Table/Field |
-|---|---|---|
-| **End-to-End Transit Time (E2E)** | `completed_at - created_at` (hours) | `fact_shipment.completed_at - fact_shipment.created_at` |
-| **Pickup Time** | `pickup_at - created_at` (hours) | `fact_shipment.pickup_at - fact_shipment.created_at` |
-| **Hub Storage Time** | `hub_departed.event_time - hub_arrived.event_time` | `fact_shipment_route`: `event_type=DEPARTED_HUB`.`event_time` - `event_type=ARRIVED_AT_HUB`.`event_time` |
-| **Transit Time** | `arrived_dest_hub.event_time - departed_origin_hub.event_time` | `fact_shipment_route` stateful: from `DEPARTED_HUB` to next `ARRIVED_AT_HUB` |
-| **Out-for-Delivery Time** | `completed_at - out_for_delivery_at` | `fact_shipment.completed_at - fact_shipment.out_for_delivery_at` |
-| **Total Storage Time (all hubs)** | `SUM(duration_at_location_minutes)` for hub events | `fact_shipment_route`: SUM by `shipment_id` |
-| **Warehouse dwell time (streaming)** | `hub_departed_time - hub_arrived_time` | `stream_tracking_event`: stateful `mapGroupsWithState` by `shipment_id` |
-
----
-
-### E3. SLA & Quality KPIs
-
-| KPI | Formula | Table/Field |
-|---|---|---|
-| **SLA compliance rate** | `COUNT(completed_at <= sla_committed_date) / COUNT(completed_at) * 100` | `fact_shipment` WHERE `current_status = 'DELIVERED'` |
-| **SLA breach count** | `COUNT` WHERE `completed_at > sla_committed_date` OR (`is_delayed=true AND current_status != 'DELIVERED'`) | `fact_shipment` |
-| **Delay duration** | `MAX(current_timestamp, completed_at) - sla_committed_date` (days) | `fact_shipment.sla_committed_date` |
-| **First attempt success rate** | `COUNT(attempt_no=1 AND result='SUCCESS') / COUNT(DISTINCT shipment_id) * 100` | `fact_delivery_attempt` |
-| **Re-delivery rate** | `COUNT(attempt_no > 1) / COUNT(DISTINCT shipment_id) * 100` | `fact_delivery_attempt` |
-| **Return rate** | `COUNT(is_returned=true) / COUNT(*) * 100` | `fact_shipment` |
-| **Top failure reasons** | `COUNT` GROUP BY `failure_reason_code` ORDER BY COUNT DESC | `fact_delivery_attempt` WHERE `result='FAILED'` |
-
----
-
-### E4. Hub Performance KPIs
-
-| KPI | Formula | Table/Field |
-|---|---|---|
-| **Hub throughput (shipments/hour)** | `COUNT(event_type IN ('ARRIVED_AT_HUB','DEPARTED_HUB'))` / hour | `stream_tracking_event` TUMBLING WINDOW 1h |
-| **Post office congestion** | `overdue_shipments` from latest snapshot | `fact_hub_inventory` or streaming: `dwell_hours > threshold` |
-| **Average dwell time per hub** | `AVG(duration_at_location_minutes)` GROUP BY `facility_id` | `fact_shipment_route` |
-| **Hub congestion score** | `capacity_utilization_pct` | `fact_hub_inventory` |
-| **Post offices with delayed orders** | `COUNT(is_delayed=true)` GROUP BY `current_facility_id` | `fact_shipment` |
-
----
-
-### E5. Anomaly Detection Rules
-
-| Anomaly | Rule | Data Source |
-|---|---|---|
-| **Order delayed in process** | No new events for `> 24h` since last event, AND `current_status NOT IN ('DELIVERED','RETURNED')` | `stream_tracking_event`: stateful timeout in Spark |
-| **Long storage at hub** | `duration_at_location_minutes > 480` for EXPRESS orders, `> 1440` for STANDARD orders | `fact_shipment_route` or streaming stateful |
-| **Post office congestion** | Backlog orders > 80% `capacity_per_day` FOR 2 consecutive hours | Tumbling window 1h on `stream_tracking_event` |
-| **Abnormal route** | Order passes through a hub not on its assigned route | JOIN `fact_shipment_route.facility_id` with `dim_route` |
-| **Multiple delivery failures** | `delivery_attempt_count >= 2` | `fact_shipment.delivery_attempt_count` or `stream_tracking_event` stateful |
-| **Suspected lost items** | No events for `> 72h`, not DELIVERED/RETURNED | Stateful timeout 72h in Spark |
 
 ---
 

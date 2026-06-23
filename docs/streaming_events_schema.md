@@ -1,23 +1,5 @@
 # Streaming Events Schema — Realtime Logistics System
 
-> **Scope:** Payload schema for every Kafka event produced by `simulation/event_generator.py`.
-> **Aligns with:** [`schema_design.md`](schema_design.md) (Dim/Fact) and [`.claude/rules/simulation.md`](../.claude/rules/simulation.md).
-> **Serialization:** JSON (one event per Kafka message). Bronze stores the raw payload as-is.
-
----
-
-## 0. Design Decisions
-
-| # | Decision | Rationale |
-|---|---|---|
-| 1 | **Keep 3 topics** (shipment / tracking / financial) | Split by source system + throughput tier. More topics would scatter per-shipment state for no gain. |
-| 2 | **Drop `delivery_attempted`** | Every attempt resolves to `delivered` (SUCCESS) or `failed_delivery` (FAILED). These map 1:1 to a `fact_delivery_attempt` row via `attempt_no`. A separate generic event would double-count. |
-| 3 | **`shipment_created` is a fat event** | It is the only source for the static columns of `fact_shipment` (sender/receiver/goods/fees/SLA). All other events are thin and key off `shipment_id`. |
-| 4 | **`snake_case` event_type on the wire** | Per simulation rule. Silver/Gold map to the `UPPER_CASE` enums in `schema_design.md` (see §5). |
-| 5 | **Money in VND as integers, time as ISO8601 `+07:00`** | No floating point on money; watermark uses `event_time`. |
-
----
-
 ## 1. Common Envelope (every event)
 
 Every message — regardless of topic — carries these fields. Event-specific fields are merged at the top level (flat payload, no nesting) unless noted.
