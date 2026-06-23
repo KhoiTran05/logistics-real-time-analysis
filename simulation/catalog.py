@@ -6,8 +6,6 @@ Kafka events) import this module. Because it is fully deterministic (fixed SEED)
 the IDs and FK relationships are identical on both sides, so every streaming event
 references a Dim row that actually exists. See docs/schema_design.md for columns.
 
-Pure stdlib (no faker/pandas) so it stays light enough to run inside the EC2
-generator's systemd service.
 """
 from __future__ import annotations
 
@@ -327,7 +325,7 @@ def _build_routes(rnd: random.Random, hubs: list[dict], target: int = 500) -> li
         dur = round(dist / (500 if mode == "AIR" else 50), 2)
         out.append({
             "route_id": f"LH_{o['province_id']}_{d['province_id']}_{seq:04d}",
-            "route_name": f"{o['facility_name']} → {d['facility_name']}",
+            "route_name": f"{o['facility_name']} to {d['facility_name']}",
             "origin_hub_id": o["facility_id"], "destination_hub_id": d["facility_id"],
             "transport_mode": mode, "distance_km": dist,
             "estimated_duration_hours": dur,

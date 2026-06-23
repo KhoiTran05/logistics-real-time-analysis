@@ -13,9 +13,9 @@ deterministic catalog that `dim_seeder.py` writes to the Dim tables. Every event
 therefore references a Dim row that exists (referential integrity by construction).
 
 Realism: each shipment runs the full waybill lifecycle (created -> pickup ->
-linehaul -> delivery / return) with the inter-stage delays from
-.claude/rules/simulation.md, compressed by TIME_SCALE so a shipment completes in
-~minutes of wall time. ~5% of events are delayed before send to exercise watermarks.
+linehaul -> delivery / return), compressed by TIME_SCALE so a shipment completes in
+~minutes of wall time. ~5% of events are delayed before send to exercise watermarks;
+the delay is scale-aware (a fraction of each shipment's wall-clock lifespan).
 """
 import argparse
 import heapq
@@ -46,8 +46,6 @@ ITEM_CATEGORIES = ["ELECTRONICS", "FASHION", "COSMETICS", "BOOKS", "FOOD",
 
 _seq_counter = itertools.count(1)
 
-
-# ── Indexes over the catalog ────────────────────────────────────────────────────
 class Refs:
     def __init__(self, rnd: random.Random):
         cat = build_catalog()
@@ -76,8 +74,6 @@ class Refs:
         self.services = cat["dim_service_type"]
         self.partners = [p["partner_id"] for p in cat["dim_partner"]]
 
-        # Provinces that actually have post offices, weighted by PO count (bigger
-        # provinces send/receive more parcels).
         self.order_provs = [p for p in self.po_by_prov]
         self.order_weights = [len(self.po_by_prov[p]) for p in self.order_provs]
 
@@ -98,7 +94,7 @@ class Refs:
         return self.rnd.choice(self.shippers_by_fac.get(facility_id) or self.all_shippers)
 
 
-# ── Shipment plan ───────────────────────────────────────────────────────────────
+# Shipment plan
 def _mins(rnd, lo, hi):
     """A delay drawn in [lo, hi] minutes, expressed in seconds (real-time, pre-scale)."""
     return rnd.uniform(lo, hi) * 60.0
@@ -182,9 +178,24 @@ def plan_shipment(refs: Refs, rnd: random.Random) -> list[dict]:
         {"pickup_facility_id": pickup_fac, "assigned_shipper_id": refs.pick_shipper(pickup_fac)})
 
     t += _mins(rnd, 30, 120)
+    if rnd.random() < 0.15:
+        reweighed = weight + rnd.randint(500, 2000)
+    else:
+        reweighed = weight + rnd.choice([0, 0, 0, rnd.randint(-100, 300)])
     add(TOPIC_SHIPMENT, pickup_fac, "picked_up",
         {"pickup_facility_id": pickup_fac, "shipper_id": refs.pick_shipper(pickup_fac),
-         "reweighed_gram": weight + rnd.choice([0, 0, 0, rnd.randint(-100, 300)])})
+         "reweighed_gram": reweighed})
+
+    new_shipping_fee = service["base_price_vnd"] + max(0, (reweighed - 1000)) // 500 * 3000
+    if new_shipping_fee != shipping_fee:
+        new_fuel = round(new_shipping_fee * 0.05)
+        new_total = new_shipping_fee + new_fuel + remote_fee + insurance
+        t += _mins(rnd, 0, 30)
+        add(TOPIC_FINANCIAL, pickup_fac, "fee_adjusted", {
+            "facility_id": pickup_fac, "branch_id": pickup_branch,
+            "partner_id": partner, "service_type_id": service["service_type_id"],
+            "old_total_fee_vnd": total_fee, "new_total_fee_vnd": new_total,
+            "adjustment_amount_vnd": new_total - total_fee, "reason_code": "REWEIGH"})
 
     seq = itertools.count(1)
 
@@ -219,7 +230,7 @@ def plan_shipment(refs: Refs, rnd: random.Random) -> list[dict]:
     t += _mins(rnd, 30, 90)
     track(delivery_fac, "arrived_at_destination_post_office")
 
-    # Delivery attempts — 70% delivered overall, 30% returned (per simulation rule)
+    # Delivery attempts — 70% delivered overall, 30% returned
     delivered = rnd.random() < 0.70
     if delivered:
         n_fail = rnd.choices([0, 1, 2], weights=[75, 18, 7], k=1)[0]
@@ -263,7 +274,6 @@ def plan_shipment(refs: Refs, rnd: random.Random) -> list[dict]:
     return plan
 
 
-# ── Emission ────────────────────────────────────────────────────────────────────
 def envelope(shipment_id, etype, event_dt, fields):
     return {
         "event_id": _uuid(),
@@ -301,11 +311,14 @@ class StdoutProducer:
         pass
 
 
-def run(producer, refs, rnd, rate, duration, scale, late_pct):
+def run(producer, refs, rnd, rate, duration, scale, late_pct, late_frac_lo, late_frac_hi):
     """Event-time scheduler in wall-clock seconds.
 
     Each shipment's events are scheduled at created_wall + offset/scale. ~late_pct
-    of events are held an extra (real) lateness so processing_time - event_time > 0.
+    of events are held an extra lateness so processing_time - event_time > 0. The
+    lateness is *scale-aware*: a fraction of THIS shipment's wall-clock lifespan
+    (uniform(late_frac_lo, late_frac_hi) × span), so it stays proportional to the
+    lifecycle when TIME_SCALE changes instead of being a fixed wall-clock delay.
     """
     heap = []  # (emit_wall, tie, shipment_id, topic, key, etype, event_wall, fields)
     tie = itertools.count()
@@ -324,15 +337,19 @@ def run(producer, refs, rnd, rate, duration, scale, late_pct):
         if accepting and now >= next_create:
             sid = f"VTP{datetime.now(TZ):%y%m%d}{next(_seq_counter):07d}"
             created += 1
-            for ev in plan_shipment(refs, rnd):
+            plan = plan_shipment(refs, rnd)
+            span_wall = max(ev["offset"] for ev in plan) / scale
+            for ev in plan:
                 event_wall = now + ev["offset"] / scale
-                emit_wall = event_wall + (rnd.uniform(60, 600) if rnd.random() < late_pct else 0.0)
+                if rnd.random() < late_pct:
+                    lateness = rnd.uniform(late_frac_lo, late_frac_hi) * span_wall
+                else:
+                    lateness = 0.0
+                emit_wall = event_wall + lateness
                 heapq.heappush(heap, (emit_wall, next(tie), sid, ev["topic"],
                                       ev["key"], ev["type"], event_wall, ev["fields"]))
             next_create += create_interval
 
-        # Drain everything due. Once we stop accepting, flush the rest immediately
-        # so bounded runs terminate promptly instead of waiting out late offsets.
         due = float("inf") if not accepting else now
         while heap and heap[0][0] <= due:
             _, _, sid, topic, key, etype, event_wall, fields = heapq.heappop(heap)
@@ -360,6 +377,10 @@ def main():
     ap.add_argument("--time-scale", type=float, default=2000.0,
                     help="Compress lifecycle delays by this factor")
     ap.add_argument("--late-pct", type=float, default=0.05, help="Fraction of late events")
+    ap.add_argument("--late-frac-lo", type=float, default=0.05,
+                    help="Min lateness as a fraction of a shipment's wall-clock lifespan")
+    ap.add_argument("--late-frac-hi", type=float, default=0.40,
+                    help="Max lateness as a fraction of a shipment's wall-clock lifespan")
     ap.add_argument("--seed", type=int, default=None, help="RNG seed for event randomness")
     ap.add_argument("--dry-run", action="store_true", help="Print to stdout instead of Kafka")
     args = ap.parse_args()
@@ -376,8 +397,10 @@ def main():
         producer = make_producer(bootstrap)
 
     print(f"Generating: rate={args.rate} ship/s, scale={args.time_scale}x, "
-          f"late={args.late_pct:.0%}, duration={args.duration or 'inf'}")
-    run(producer, refs, rnd, args.rate, args.duration, args.time_scale, args.late_pct)
+          f"late={args.late_pct:.0%} ({args.late_frac_lo:.2f}-{args.late_frac_hi:.2f}×lifespan), "
+          f"duration={args.duration or 'inf'}")
+    run(producer, refs, rnd, args.rate, args.duration, args.time_scale, args.late_pct,
+        args.late_frac_lo, args.late_frac_hi)
 
 
 if __name__ == "__main__":
