@@ -26,3 +26,29 @@ jobs:
       cores: 1
       instances: 1
       memory: 1536m
+
+  - name: streaming
+    application_name: streaming
+    application_file: s3a://vdt-logistics-dev-artifacts-265808836917/src/jobs/streaming/main.py
+    py_files:
+      - s3a://vdt-logistics-dev-artifacts-265808836917/src.zip
+    driver:
+      cores: 1
+      memory: 2g
+      env:
+        - name: WM_SHIPMENT
+          value: "60 seconds"
+        - name: WM_TRACKING
+          value: "60 seconds"
+        - name: WM_FINANCIAL
+          value: "60 seconds"
+        - name: TRIGGER_INTERVAL
+          value: "10 seconds"
+        - name: KPI_WINDOW_DURATION
+          value: "5 minutes"
+        - name: KPI_WINDOW_SLIDING_DURATION
+          value: "1 minute"
+    executor:
+      cores: 1
+      instances: 2
+      memory: 3g

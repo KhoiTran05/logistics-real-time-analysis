@@ -512,6 +512,21 @@ resource "time_sleep" "wait_clickhouse" {
   create_duration = "60s"
 }
 
+# Namespace-local copy of the ClickHouse credentials for the Spark driver to
+# reach the serving layer (KPI JDBC sink). Same password the server runs with.
+resource "kubernetes_secret" "clickhouse_spark" {
+  metadata {
+    name      = "clickhouse-credentials"
+    namespace = "spark"
+  }
+  data = {
+    username = var.clickhouse_username
+    password = random_password.clickhouse.result
+    database = var.clickhouse_db
+  }
+  depends_on = [kubernetes_namespace.namespaces]
+}
+
 # ── ClickHouse Schema Init ────────────────────────────────────────────────────
 
 resource "kubernetes_job" "clickhouse_init" {
@@ -529,7 +544,7 @@ resource "kubernetes_job" "clickhouse_init" {
           name = "init"
           # Reuse the running server's image — the standalone clickhouse-client
           # image is deprecated and this tag is guaranteed to exist (server pulls it).
-          image = "docker.io/bitnamilegacy/clickhouse:24.3.2-debian-12-r0"
+          image   = "docker.io/bitnamilegacy/clickhouse:24.3.2-debian-12-r0"
           command = ["/bin/sh", "-c"]
           args = [<<-EOT
             clickhouse-client \
@@ -540,49 +555,47 @@ resource "kubernetes_job" "clickhouse_init" {
               --multiquery "
                 CREATE DATABASE IF NOT EXISTS ${var.clickhouse_db};
 
-                CREATE TABLE IF NOT EXISTS ${var.clickhouse_db}.kpi_by_post_office (
-                  window_start     DateTime,
-                  window_end       DateTime,
-                  post_office_id   String,
-                  branch_id        String,
-                  event_count      UInt64,
-                  shipment_count   UInt64,
-                  revenue_vnd      Int64,
-                  cod_collected_vnd Int64,
-                  updated_at       DateTime DEFAULT now()
-                ) ENGINE = ReplacingMergeTree(updated_at)
-                ORDER BY (window_start, post_office_id);
+                -- Operational financial KPIs (§1): revenue + COD + COD success-rate
+                -- components, by facility, sliding window. rate = collected/committed.
+                CREATE TABLE IF NOT EXISTS ${var.clickhouse_db}.kpi_financial (
+                  window_start        DateTime,
+                  window_end          DateTime,
+                  facility_id         String,
+                  total_revenue_vnd   Int64,
+                  total_cod_vnd       Int64,
+                  cod_collected_count UInt64,
+                  cod_committed_count UInt64
+                ) ENGINE = SummingMergeTree
+                ORDER BY (window_start, window_end, facility_id);
 
-                CREATE TABLE IF NOT EXISTS ${var.clickhouse_db}.kpi_by_branch (
-                  window_start     DateTime,
-                  window_end       DateTime,
-                  branch_id        String,
-                  total_shipments  UInt64,
-                  revenue_vnd      Int64,
-                  cod_collected_vnd Int64,
-                  sla_breached     UInt64,
-                  updated_at       DateTime DEFAULT now()
-                ) ENGINE = ReplacingMergeTree(updated_at)
-                ORDER BY (window_start, branch_id);
+                -- Order volume by pickup facility (§1), tumbling window.
+                CREATE TABLE IF NOT EXISTS ${var.clickhouse_db}.kpi_order_volume_facility (
+                  window_start       DateTime,
+                  window_end         DateTime,
+                  pickup_facility_id String,
+                  order_count        UInt64
+                ) ENGINE = SummingMergeTree
+                ORDER BY (window_start, window_end, pickup_facility_id);
+
+                -- Order volume by partner / service (§1), tumbling window.
+                CREATE TABLE IF NOT EXISTS ${var.clickhouse_db}.kpi_order_volume_partner_service (
+                  window_start    DateTime,
+                  window_end      DateTime,
+                  partner_id      String,
+                  service_type_id String,
+                  order_count     UInt64
+                ) ENGINE = SummingMergeTree
+                ORDER BY (window_start, window_end, partner_id, service_type_id);
 
                 CREATE TABLE IF NOT EXISTS ${var.clickhouse_db}.anomaly_alerts (
                   detected_at      DateTime,
                   shipment_id      String,
-                  post_office_id   String,
+                  facility_id      String,
                   anomaly_type     String,
                   severity         String,
                   detail           String
                 ) ENGINE = MergeTree()
                 ORDER BY (detected_at, anomaly_type);
-
-                CREATE TABLE IF NOT EXISTS ${var.clickhouse_db}.cod_realtime (
-                  collection_time  DateTime,
-                  post_office_id   String,
-                  shipper_id       String,
-                  cod_amount_vnd   Int64,
-                  payment_method   String
-                ) ENGINE = MergeTree()
-                ORDER BY (collection_time, post_office_id);
               "
           EOT
           ]
