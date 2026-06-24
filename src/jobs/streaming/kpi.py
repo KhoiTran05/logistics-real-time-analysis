@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
+from pyspark.sql.types import StringType
 
 from src.jobs.streaming.config import (
     CLICKHOUSE_DRIVER,
@@ -30,8 +31,14 @@ def _to_clickhouse(df: DataFrame, table: str) -> None:
     out = (
         df.withColumn("window_start", F.col("window.start"))
         .withColumn("window_end", F.col("window.end"))
+        .withColumn("ingested_at", F.current_timestamp())
         .drop("window")
     )
+
+    string_cols = [f.name for f in out.schema.fields if isinstance(f.dataType, StringType)]
+    for c in string_cols:
+        out = out.withColumn(c, F.coalesce(F.col(c), F.lit("UNKNOWN")))
+        
     (
         out.write.format("jdbc")
         .option("url", CLICKHOUSE_JDBC_URL)
@@ -70,6 +77,7 @@ def _financial_kpi(df: DataFrame) -> None:
             "facility_id"
         ) \
         .agg(
+            # Revenue/COD
             F.sum("total_revenue").alias("total_revenue_vnd"),
 
             F.sum(
@@ -80,6 +88,7 @@ def _financial_kpi(df: DataFrame) -> None:
                 .otherwise(0)
             ).alias("total_cod_vnd"),
 
+            # COD collection success rate
             num.alias("cod_collected_count"),
             denom.alias("cod_committed_count"),
         )
@@ -89,6 +98,7 @@ def _financial_kpi(df: DataFrame) -> None:
 def _shipment_kpi(df: DataFrame) -> None:
     shipment_created = df.filter(F.col("event_type") == "shipment_created")
 
+    # Order volume
     order_facility = shipment_created \
         .groupBy(
             F.window("event_time", KPI_WINDOW_DURATION),
@@ -111,6 +121,54 @@ def _shipment_kpi(df: DataFrame) -> None:
     _to_clickhouse(order_facility, "kpi_order_volume_facility")
     _to_clickhouse(order_partner_service, "kpi_order_volume_partner_service")
 
+def _tracking_kpi(df: DataFrame) -> None:
+    facility_counter = df \
+        .groupBy(
+            F.window("event_time", KPI_WINDOW_DURATION),
+            "facility_id" 
+        ) \
+        .agg(
+            # Throughput/Backlog
+            F.count(
+                F.when(F.col("event_type").isin("arrived_at_origin_post_office", "arrived_at_hub", "arrived_at_destination_post_office",), 1)
+            ).alias("inbound_count"),
+            F.count(
+                F.when(F.col("event_type").isin("departed_origin_post_office", "departed_hub", "dispatched_for_delivery"), 1)
+            ).alias("outbound_count"),
+
+            # Failed-delivery rate
+            F.count(
+                F.when(F.col("event_type") == "failed_delivery", 1)
+            ).alias("failed_delivery_count"),
+            F.count(
+                F.when(F.col("event_type") == "dispatched_for_delivery", 1)
+            ).alias("out_for_delivery_count"),
+        )
+    
+    # Failure reason
+    failure_reason_counter = df \
+        .filter(F.col("event_type") == "failed_delivery") \
+        .groupBy(
+            F.window("event_time", KPI_WINDOW_DURATION),
+            "failure_reason_code"
+        ) \
+        .agg(
+            F.count("*").alias("failed_delivery_count"),
+        )
+
+    # Global return rate
+    returned_counter = df \
+        .groupBy(F.window("event_time", KPI_WINDOW_DURATION)) \
+        .agg(
+            F.count(
+                F.when(F.col("event_type") == "returned_to_sender", 1)
+            ).alias("returned_count")
+        )
+
+    _to_clickhouse(facility_counter, "kpi_facility_flow")
+    _to_clickhouse(failure_reason_counter, "kpi_failure_reason")
+    _to_clickhouse(returned_counter, "kpi_returns")
+    
 
 def kpi_batch_writer(topic: str):
 
@@ -135,7 +193,7 @@ def kpi_batch_writer(topic: str):
             elif topic == TOPIC_SHIPMENT:
                 _shipment_kpi(base_df)
             elif topic == TOPIC_TRACKING:
-                pass
+                _tracking_kpi(base_df)
         finally:
             batch_df.unpersist()
 
