@@ -737,3 +737,78 @@ resource "helm_release" "grafana" {
 
   depends_on = [kubernetes_job.clickhouse_init]
 }
+
+# ── Kafka UI ──────────────────────────────────────────────────────────────────
+# Lightweight web UI to browse topics / partitions / consumer groups / live
+# messages while the streaming demo runs. Internal only (ClusterIP) — reach it via
+# `kubectl port-forward`. Deployed as a plain Deployment (no Helm) to avoid chart
+# version churn; pinned image, points at the internal Kafka bootstrap.
+
+resource "kubernetes_deployment_v1" "kafka_ui" {
+  metadata {
+    name      = "kafka-ui"
+    namespace = "kafka"
+    labels    = { app = "kafka-ui" }
+  }
+  spec {
+    replicas = 1
+    selector { match_labels = { app = "kafka-ui" } }
+    template {
+      metadata { labels = { app = "kafka-ui" } }
+      spec {
+        node_selector = { "node-type" = "general" }
+        container {
+          name  = "kafka-ui"
+          image = "provectuslabs/kafka-ui:v0.7.2"
+
+          port { container_port = 8080 }
+
+          env {
+            name  = "KAFKA_CLUSTERS_0_NAME"
+            value = "logistics"
+          }
+          env {
+            name  = "KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS"
+            value = "${var.kafka_cluster_name}-kafka-bootstrap.kafka.svc.cluster.local:9092"
+          }
+          env {
+            name  = "DYNAMIC_CONFIG_ENABLED"
+            value = "true"
+          }
+
+          resources {
+            requests = { memory = "256Mi", cpu = "100m" }
+            limits   = { memory = "512Mi", cpu = "500m" }
+          }
+
+          readiness_probe {
+            http_get {
+              path = "/actuator/health"
+              port = 8080
+            }
+            initial_delay_seconds = 30
+            period_seconds        = 10
+          }
+        }
+      }
+    }
+  }
+  depends_on = [time_sleep.wait_kafka]
+}
+
+resource "kubernetes_service_v1" "kafka_ui" {
+  metadata {
+    name      = "kafka-ui"
+    namespace = "kafka"
+    labels    = { app = "kafka-ui" }
+  }
+  spec {
+    selector = { app = "kafka-ui" }
+    port {
+      port        = 8080
+      target_port = 8080
+    }
+    type = "ClusterIP"
+  }
+  depends_on = [kubernetes_deployment_v1.kafka_ui]
+}

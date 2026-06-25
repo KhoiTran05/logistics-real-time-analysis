@@ -1,23 +1,23 @@
 jobs:
   - name: dim_tables_create
     application_name: dim-tables-create
-    application_file: s3a://vdt-logistics-dev-artifacts-265808836917/src/jobs/dim_tables_create.py
+    application_file: s3a://vdt-logistics-dev-artifacts-747452892492/src/jobs/dim_tables_create.py
     py_files:
-      - s3a://vdt-logistics-dev-artifacts-265808836917/src.zip
+      - s3a://vdt-logistics-dev-artifacts-747452892492/src.zip
     arguments:
       - --source
       - '[
-          {"source_table": "dim_region", "source_format": "csv", "source_path": "s3a://vdt-logistics-dev-artifacts-265808836917/dim-seed/dim_region/dim_region.csv"},
-          {"source_table": "dim_province", "source_format": "csv", "source_path": "s3a://vdt-logistics-dev-artifacts-265808836917/dim-seed/dim_province/dim_province.csv"},
-          {"source_table": "dim_district", "source_format": "csv", "source_path": "s3a://vdt-logistics-dev-artifacts-265808836917/dim-seed/dim_district/dim_district.csv"},
-          {"source_table": "dim_ward", "source_format": "csv", "source_path": "s3a://vdt-logistics-dev-artifacts-265808836917/dim-seed/dim_ward/dim_ward.csv"},
-          {"source_table": "dim_facility", "source_format": "csv", "source_path": "s3a://vdt-logistics-dev-artifacts-265808836917/dim-seed/dim_facility/dim_facility.csv"},
-          {"source_table": "dim_branch", "source_format": "csv", "source_path": "s3a://vdt-logistics-dev-artifacts-265808836917/dim-seed/dim_branch/dim_branch.csv"},
-          {"source_table": "dim_service_type", "source_format": "csv", "source_path": "s3a://vdt-logistics-dev-artifacts-265808836917/dim-seed/dim_service_type/dim_service_type.csv"},
-          {"source_table": "dim_shipper", "source_format": "csv", "source_path": "s3a://vdt-logistics-dev-artifacts-265808836917/dim-seed/dim_shipper/dim_shipper.csv"},
-          {"source_table": "dim_route", "source_format": "csv", "source_path": "s3a://vdt-logistics-dev-artifacts-265808836917/dim-seed/dim_route/dim_route.csv"},
-          {"source_table": "dim_partner", "source_format": "csv", "source_path": "s3a://vdt-logistics-dev-artifacts-265808836917/dim-seed/dim_partner/dim_partner.csv"},
-          {"source_table": "dim_date", "source_format": "csv", "source_path": "s3a://vdt-logistics-dev-artifacts-265808836917/dim-seed/dim_date/dim_date.csv"}
+          {"source_table": "dim_region", "source_format": "csv", "source_path": "s3a://vdt-logistics-dev-artifacts-747452892492/dim-seed/dim_region/dim_region.csv"},
+          {"source_table": "dim_province", "source_format": "csv", "source_path": "s3a://vdt-logistics-dev-artifacts-747452892492/dim-seed/dim_province/dim_province.csv"},
+          {"source_table": "dim_district", "source_format": "csv", "source_path": "s3a://vdt-logistics-dev-artifacts-747452892492/dim-seed/dim_district/dim_district.csv"},
+          {"source_table": "dim_ward", "source_format": "csv", "source_path": "s3a://vdt-logistics-dev-artifacts-747452892492/dim-seed/dim_ward/dim_ward.csv"},
+          {"source_table": "dim_facility", "source_format": "csv", "source_path": "s3a://vdt-logistics-dev-artifacts-747452892492/dim-seed/dim_facility/dim_facility.csv"},
+          {"source_table": "dim_branch", "source_format": "csv", "source_path": "s3a://vdt-logistics-dev-artifacts-747452892492/dim-seed/dim_branch/dim_branch.csv"},
+          {"source_table": "dim_service_type", "source_format": "csv", "source_path": "s3a://vdt-logistics-dev-artifacts-747452892492/dim-seed/dim_service_type/dim_service_type.csv"},
+          {"source_table": "dim_shipper", "source_format": "csv", "source_path": "s3a://vdt-logistics-dev-artifacts-747452892492/dim-seed/dim_shipper/dim_shipper.csv"},
+          {"source_table": "dim_route", "source_format": "csv", "source_path": "s3a://vdt-logistics-dev-artifacts-747452892492/dim-seed/dim_route/dim_route.csv"},
+          {"source_table": "dim_partner", "source_format": "csv", "source_path": "s3a://vdt-logistics-dev-artifacts-747452892492/dim-seed/dim_partner/dim_partner.csv"},
+          {"source_table": "dim_date", "source_format": "csv", "source_path": "s3a://vdt-logistics-dev-artifacts-747452892492/dim-seed/dim_date/dim_date.csv"}
         ]'
     driver:
       cores: 1
@@ -29,9 +29,9 @@ jobs:
 
   - name: streaming
     application_name: streaming
-    application_file: s3a://vdt-logistics-dev-artifacts-265808836917/src/jobs/streaming/main.py
+    application_file: s3a://vdt-logistics-dev-artifacts-747452892492/src/jobs/streaming/main.py
     py_files:
-      - s3a://vdt-logistics-dev-artifacts-265808836917/src.zip
+      - s3a://vdt-logistics-dev-artifacts-747452892492/src.zip
     driver:
       cores: 1
       memory: 2g

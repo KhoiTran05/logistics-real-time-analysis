@@ -50,9 +50,10 @@ def clean(df: DataFrame, topic: str) -> DataFrame:
     return flag_quality(deduped, topic)
 
 
-_EVENT_TYPE_NORM = F.when(
-    F.col("event_type") == "shipment_created", F.lit("ORDER_CREATED")
-).otherwise(F.upper(F.col("event_type")))
+def _event_type_norm():
+    return F.when(
+        F.col("event_type") == "shipment_created", F.lit("ORDER_CREATED")
+    ).otherwise(F.upper(F.col("event_type")))
 
 
 def enrich(df: DataFrame, topic: str, dims: dict[str, DataFrame]) -> DataFrame:
@@ -69,7 +70,7 @@ def enrich(df: DataFrame, topic: str, dims: dict[str, DataFrame]) -> DataFrame:
             .withColumn("enriched_at", F.current_timestamp())
 
     if topic == TOPIC_TRACKING:
-        out = df.withColumn("event_type_norm", _EVENT_TYPE_NORM)
+        out = df.withColumn("event_type_norm", _event_type_norm())
         fac = dims["dim_facility"].select(
             F.col("facility_id"), F.col("branch_id"), F.col("province_id"),
         )
@@ -83,7 +84,7 @@ def enrich(df: DataFrame, topic: str, dims: dict[str, DataFrame]) -> DataFrame:
             .withColumn("enriched_at", F.current_timestamp())
 
     # TOPIC_SHIPMENT
-    out = df.withColumn("event_type_norm", _EVENT_TYPE_NORM)
+    out = df.withColumn("event_type_norm", _event_type_norm())
     fac = dims["dim_facility"].select(
         F.col("facility_id").alias("pickup_facility_id"),
         F.col("branch_id").alias("pickup_branch_id"),
