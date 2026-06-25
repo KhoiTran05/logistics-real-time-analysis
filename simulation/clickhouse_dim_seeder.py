@@ -1,25 +1,4 @@
 #!/usr/bin/env python3
-"""
-ClickHouse dimension seeder — loads the small roll-up dimensions into ClickHouse.
-
-The realtime KPI tables key on facility_id / branch / partner / service_type_id
-(see src/jobs/streaming/kpi.py). The streaming sink deliberately does NOT join
-dims (kept additive + low-state), so these reference tables let the Grafana
-dashboards roll facility → branch → region up and resolve human-readable names at
-query time.
-
-Source of truth is catalog.build_catalog() — the same deterministic dims that
-dim_seeder.py writes to S3, so IDs match the Kafka events exactly.
-
-Only the dims needed for roll-up are loaded (region/branch/facility/partner/
-service_type); the large dims (ward/shipper/date) are not used by any KPI.
-
-Idempotent: every table is CREATE IF NOT EXISTS + TRUNCATE + re-insert.
-
-Run once, after dim_seeder.py, with a port-forward to the in-cluster ClickHouse:
-    kubectl -n clickhouse port-forward svc/clickhouse 8123:8123 &
-    python clickhouse_dim_seeder.py --password "$CLICKHOUSE_PASSWORD"
-"""
 from __future__ import annotations
 
 import argparse

@@ -12,15 +12,11 @@ from src.jobs.streaming.config import (
 )
 
 
-def clean(df: DataFrame, topic: str) -> DataFrame:
-    """Watermark + idempotent dedup on event_id, plus data-quality flags.
+def flag_quality(df: DataFrame, topic: str) -> DataFrame:
+    """Add data-quality flags (`dq_flags` / `is_valid`). Non-stateful.
 
     Dirty rows are *flagged*, not dropped, so downstream DQ KPIs can count them.
     """
-    deduped = df.withWatermark("event_time", WATERMARK[topic]).dropDuplicates(
-        ["event_id"]
-    )
-
     flags = [
         F.when(F.col("event_id").isNull(), F.lit("NULL_EVENT_ID")),
         F.when(F.col("event_time").isNull(), F.lit("NULL_EVENT_TIME")),
@@ -37,7 +33,21 @@ def clean(df: DataFrame, topic: str) -> DataFrame:
         ]
 
     dq = F.array_compact(F.array(*flags))
-    return deduped.withColumn("dq_flags", dq).withColumn("is_valid", F.size(dq) == 0)
+    return df.withColumn("dq_flags", dq).withColumn("is_valid", F.size(dq) == 0)
+
+
+def clean(df: DataFrame, topic: str) -> DataFrame:
+    """Watermark + idempotent dedup on event_id, plus data-quality flags.
+
+    Used by the per-topic KPI streams (dedup is safe there: the windowed aggregates run
+    in batch mode inside foreachBatch). The unified state machine must NOT chain dedup
+    upstream of applyInPandasWithState, so it uses flag_quality directly; exact-once
+    dedup on event_id is a Silver/batch concern per schema_design.md.
+    """
+    deduped = df.withWatermark("event_time", WATERMARK[topic]).dropDuplicates(
+        ["event_id"]
+    )
+    return flag_quality(deduped, topic)
 
 
 _EVENT_TYPE_NORM = F.when(
@@ -110,7 +120,6 @@ def enrich(df: DataFrame, topic: str, dims: dict[str, DataFrame]) -> DataFrame:
         )
     )
 
-    # Volumetric / charged weight (industry divisor 5000 cm³/kg) and route class.
     volumetric_gram = (
         F.col("length_cm") * F.col("width_cm") * F.col("height_cm") / 5000.0 * 1000.0
     )

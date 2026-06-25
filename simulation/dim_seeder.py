@@ -1,18 +1,4 @@
 #!/usr/bin/env python3
-"""
-Dim seeder — writes every Dim table to CSV and (optionally) uploads to S3.
-
-Run ONCE before the event generator: events reference the IDs produced here, and
-the batch/Spark pipeline reads these Dim tables as the join dimensions.
-
-IDs come from `catalog.build_catalog()` — the same deterministic source the event
-generator uses, so referential integrity is guaranteed (see docs/schema_design.md).
-
-Usage:
-    python dim_seeder.py                              # write CSVs to ./_dim_out
-    python dim_seeder.py --s3-bucket my-artifacts     # also upload to s3://.../dim-seed/
-    python dim_seeder.py --s3-bucket b --s3-prefix dim-seed/ --seed 42
-"""
 import argparse
 import csv
 import io

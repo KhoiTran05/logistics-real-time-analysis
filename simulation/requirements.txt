@@ -1,4 +1,4 @@
-# Streaming generator (event_generator.py) + dim seeder (dim_seeder.py)
+# event_generator.py + dim_seeder.py
 kafka-python==2.0.2
 boto3>=1.34
 lz4>=4.3

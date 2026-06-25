@@ -8,14 +8,25 @@ from src.jobs.streaming.ensure_tables import (
     TOPIC_SHIPMENT,
     TOPIC_TRACKING,
 )
+from src.jobs.streaming.shipment_state import (  
+    HUB_DWELL_EXPRESS_S,
+    HUB_DWELL_STANDARD_S,
+    LOST_TIMEOUT_S,
+    STUCK_TIMEOUT_S,
+)
 
-# Re-export so the rest of the streaming package has a single config import.
+
 __all__ = [
     "CATALOG",
     "TOPIC_SHIPMENT",
     "TOPIC_TRACKING",
     "TOPIC_FINANCIAL",
     "WATERMARK",
+    "WM_UNIFIED",
+    "STUCK_TIMEOUT_S",
+    "LOST_TIMEOUT_S",
+    "HUB_DWELL_EXPRESS_S",
+    "HUB_DWELL_STANDARD_S",
     "MAX_OFFSETS",
     "TRIGGER_INTERVAL",
     "KPI_WINDOW_DURATION",
@@ -37,6 +48,8 @@ MAX_OFFSETS = {
     TOPIC_TRACKING: 80000,
     TOPIC_FINANCIAL: 8000,
 }
+
+WM_UNIFIED = os.environ.get("WM_UNIFIED", "60 seconds")
 
 TRIGGER_INTERVAL = os.environ.get("TRIGGER_INTERVAL", "10 seconds")
 KPI_WINDOW_DURATION = os.environ.get("KPI_WINDOW_DURATION", "5 minutes")

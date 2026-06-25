@@ -12,7 +12,8 @@ from src.jobs.streaming.dims import load_dims
 from src.jobs.streaming.kpi import kpi_batch_writer, start_kpis
 from src.jobs.streaming.session import build_spark
 from src.jobs.streaming.source import parse, read_kafka
-from src.jobs.streaming.transform import build_enriched
+from src.jobs.streaming.stateful import build_unified, start_stateful
+from src.jobs.streaming.transform import build_enriched, flag_quality
 from src.jobs.streaming.ensure_tables import ensure_bronze_tables
 from src.utils.logger import setup_logger
 
@@ -32,6 +33,7 @@ def main() -> None:
     ensure_bronze_tables(spark, bronze_db)
     dims = load_dims(spark, dim_db)
 
+    cleaned_by_topic = {}
     for topic in (TOPIC_SHIPMENT, TOPIC_TRACKING, TOPIC_FINANCIAL):
         safe = topic.replace(".", "_")
         raw = read_kafka(spark, bootstrap, topic)
@@ -51,6 +53,21 @@ def main() -> None:
             f"{ckpt_root}/kpis/{safe}"
         )
         logger.info("KPI stream started for %s", topic)
+
+        cleaned_by_topic[topic] = flag_quality(parsed, topic).filter("is_valid")
+
+    
+    route_dest = {
+        r["route_id"]: r["destination_hub_id"]
+        for r in dims["dim_route"].select("route_id", "destination_hub_id").collect()
+    }
+    speed_tier = {
+        r["service_type_id"]: r["speed_tier"]
+        for r in dims["dim_service_type"].select("service_type_id", "speed_tier").collect()
+    }
+    unified = build_unified(cleaned_by_topic)
+    start_stateful(unified, route_dest, speed_tier, f"{ckpt_root}/stateful")
+    logger.info("Unified per-shipment state machine started")
 
     spark.streams.awaitAnyTermination()
 

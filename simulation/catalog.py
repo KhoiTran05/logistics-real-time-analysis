@@ -1,12 +1,3 @@
-"""
-Deterministic dimension catalog — the single source of truth for all IDs.
-
-Both `dim_seeder.py` (writes Dim tables to S3) and `event_generator.py` (produces
-Kafka events) import this module. Because it is fully deterministic (fixed SEED),
-the IDs and FK relationships are identical on both sides, so every streaming event
-references a Dim row that actually exists. See docs/schema_design.md for columns.
-
-"""
 from __future__ import annotations
 
 import random
@@ -329,7 +320,7 @@ def _build_routes(rnd: random.Random, hubs: list[dict], target: int = 500) -> li
             "origin_hub_id": o["facility_id"], "destination_hub_id": d["facility_id"],
             "transport_mode": mode, "distance_km": dist,
             "estimated_duration_hours": dur,
-            "departure_times": '["06:00","12:00","20:00"]',
+            "departure_times": rnd.choice(["06:00:00", "12:00:00", "18:00:00"]),
             "frequency_per_day": rnd.choice([1, 2, 3, 4]),
             "carrier_name": rnd.choice(["Nội bộ", "Vietnam Airlines Cargo", "Đường sắt VN"]),
             "is_active": True, "effective_from": "2023-01-01", "effective_to": None,

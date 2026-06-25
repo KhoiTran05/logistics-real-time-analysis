@@ -1,22 +1,4 @@
 #!/usr/bin/env python3
-"""
-Streaming event generator — produces logistics events to 3 Kafka topics, exactly
-following docs/streaming_events_schema.md.
-
-Topics / partition keys:
-  logistics.shipment.events    key = pickup_facility_id
-  logistics.tracking.events    key = facility_id
-  logistics.financial.events   key = facility_id
-
-ID synchronization: all IDs come from `catalog.build_catalog()`, the same
-deterministic catalog that `dim_seeder.py` writes to the Dim tables. Every event
-therefore references a Dim row that exists (referential integrity by construction).
-
-Realism: each shipment runs the full waybill lifecycle (created -> pickup ->
-linehaul -> delivery / return), compressed by TIME_SCALE so a shipment completes in
-~minutes of wall time. ~5% of events are delayed before send to exercise watermarks;
-the delay is scale-aware (a fraction of each shipment's wall-clock lifespan).
-"""
 import argparse
 import heapq
 import itertools
