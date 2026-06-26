@@ -555,77 +555,80 @@ resource "kubernetes_job" "clickhouse_init" {
               --multiquery "
                 CREATE DATABASE IF NOT EXISTS ${var.clickhouse_db};
 
-                -- All timestamps are DateTime('UTC'): the Spark session runs in UTC
-                -- (spark.sql.session.timeZone=UTC) and event_time is parsed from the
-                -- +07:00 ISO strings into the correct UTC instant, so windows are UTC.
-                -- Store UTC end-to-end; Grafana converts to local (+07) for display.
+                -- All timestamps are plain DateTime (stored as UTC epoch): the Spark
+                -- session runs in UTC (spark.sql.session.timeZone=UTC) and event_time is
+                -- parsed from the +07:00 ISO strings into the correct UTC instant, so
+                -- windows are UTC. We avoid DateTime because the ClickHouse JDBC
+                -- driver reports a tz-aware DateTime as TIMESTAMP_WITH_TIMEZONE, which
+                -- Spark 3.5's generic JDBC dialect can't map (UNRECOGNIZED_SQL_TYPE) on
+                -- write. Store UTC end-to-end; Grafana converts to local (+07) for display.
 
                 -- Operational financial KPIs (§1): revenue + COD + COD success-rate
                 -- components, by facility, sliding window. rate = collected/committed.
                 CREATE TABLE IF NOT EXISTS ${var.clickhouse_db}.kpi_financial (
-                  window_start        DateTime('UTC'),
-                  window_end          DateTime('UTC'),
+                  window_start        DateTime,
+                  window_end          DateTime,
                   facility_id         String,
                   total_revenue_vnd   Int64,
                   total_cod_vnd       Int64,
                   cod_collected_count UInt64,
                   cod_committed_count UInt64,
-                  ingested_at         DateTime('UTC')
+                  ingested_at         DateTime
                 ) ENGINE = SummingMergeTree
                 ORDER BY (window_start, window_end, facility_id);
 
                 -- Order volume by pickup facility (§1), tumbling window.
                 CREATE TABLE IF NOT EXISTS ${var.clickhouse_db}.kpi_order_volume_facility (
-                  window_start       DateTime('UTC'),
-                  window_end         DateTime('UTC'),
+                  window_start       DateTime,
+                  window_end         DateTime,
                   pickup_facility_id String,
                   order_count        UInt64,
-                  ingested_at        DateTime('UTC')
+                  ingested_at        DateTime
                 ) ENGINE = SummingMergeTree
                 ORDER BY (window_start, window_end, pickup_facility_id);
 
                 -- Order volume by partner / service (§1), tumbling window.
                 CREATE TABLE IF NOT EXISTS ${var.clickhouse_db}.kpi_order_volume_partner_service (
-                  window_start    DateTime('UTC'),
-                  window_end      DateTime('UTC'),
+                  window_start    DateTime,
+                  window_end      DateTime,
                   partner_id      String,
                   service_type_id String,
                   order_count     UInt64,
-                  ingested_at     DateTime('UTC')
+                  ingested_at     DateTime
                 ) ENGINE = SummingMergeTree
                 ORDER BY (window_start, window_end, partner_id, service_type_id);
 
                 -- Facility flow (§5/§2): inbound/outbound for throughput & backlog,
                 -- plus failed / out-for-delivery counts for the failed-delivery rate.
                 CREATE TABLE IF NOT EXISTS ${var.clickhouse_db}.kpi_facility_flow (
-                  window_start           DateTime('UTC'),
-                  window_end             DateTime('UTC'),
+                  window_start           DateTime,
+                  window_end             DateTime,
                   facility_id            String,
                   inbound_count          UInt64,
                   outbound_count         UInt64,
                   failed_delivery_count  UInt64,
                   out_for_delivery_count UInt64,
-                  ingested_at            DateTime('UTC')
+                  ingested_at            DateTime
                 ) ENGINE = SummingMergeTree
                 ORDER BY (window_start, window_end, facility_id);
 
                 -- Top failure reasons (§4), tumbling window.
                 CREATE TABLE IF NOT EXISTS ${var.clickhouse_db}.kpi_failure_reason (
-                  window_start          DateTime('UTC'),
-                  window_end            DateTime('UTC'),
+                  window_start          DateTime,
+                  window_end            DateTime,
                   failure_reason_code   String,
                   failed_delivery_count UInt64,
-                  ingested_at           DateTime('UTC')
+                  ingested_at           DateTime
                 ) ENGINE = SummingMergeTree
                 ORDER BY (window_start, window_end, failure_reason_code);
 
                 -- Global return count (§4). Return rate = returned / order volume
                 -- (kpi_order_volume_facility) joined by window at query time.
                 CREATE TABLE IF NOT EXISTS ${var.clickhouse_db}.kpi_returns (
-                  window_start   DateTime('UTC'),
-                  window_end     DateTime('UTC'),
+                  window_start   DateTime,
+                  window_end     DateTime,
                   returned_count UInt64,
-                  ingested_at    DateTime('UTC')
+                  ingested_at    DateTime
                 ) ENGINE = SummingMergeTree
                 ORDER BY (window_start, window_end);
 
@@ -650,12 +653,12 @@ resource "kubernetes_job" "clickhouse_init" {
                   attempt_count         Nullable(UInt8),
                   first_attempt_success Nullable(UInt8),
                   is_redelivery         Nullable(UInt8),
-                  updated_at            DateTime('UTC')
+                  updated_at            DateTime
                 ) ENGINE = ReplacingMergeTree(updated_at)
                 ORDER BY shipment_id;
 
                 CREATE TABLE IF NOT EXISTS ${var.clickhouse_db}.anomaly_alerts (
-                  detected_at      DateTime('UTC'),
+                  detected_at      DateTime,
                   shipment_id      String,
                   facility_id      String,
                   anomaly_type     String,
