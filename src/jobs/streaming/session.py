@@ -8,7 +8,7 @@ from src.jobs.streaming.config import CATALOG
 def build_spark(warehouse: str) -> SparkSession:
     """SparkSession on the Glue Iceberg catalog, tuned for low-latency streaming."""
     return (
-        SparkSession.builder.appName("streaming_bronze_enrich")
+        SparkSession.builder.appName("streaming")
         .config(
             "spark.sql.extensions",
             "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
@@ -32,5 +32,6 @@ def build_spark(warehouse: str) -> SparkSession:
         .config("spark.sql.adaptive.enabled", "false")
         .config("spark.sql.streaming.minBatchesToRetain", "5")
         .config("spark.sql.streaming.noDataMicroBatchesEnabled", "true")
+        .config("spark.sql.execution.arrow.pyspark.enabled", "true")
         .getOrCreate()
     )

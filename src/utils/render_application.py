@@ -76,8 +76,15 @@ def render_application(
 
     application = _render_value(template, context)
     application["spec"]["arguments"] = job_config.get("arguments", [])
-    application["spec"]["driver"].update(job_config.get("driver", {}))
+
+
+    driver_override = {k: v for k, v in job_config.get("driver", {}).items() if k != "env"}
+    application["spec"]["driver"].update(driver_override)
     application["spec"]["executor"].update(job_config.get("executor", {}))
+
+    template_env = application["spec"]["driver"].get("env", [])
+    job_env = _deep_get(job_config, "driver", "env", default=[])
+    application["spec"]["driver"]["env"] = template_env + job_env
 
     py_files = job_config.get("py_files")
     if py_files:

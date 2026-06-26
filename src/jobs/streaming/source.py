@@ -13,7 +13,7 @@ def read_kafka(spark: SparkSession, bootstrap: str, topic: str) -> DataFrame:
         spark.readStream.format("kafka")
         .option("kafka.bootstrap.servers", bootstrap)
         .option("subscribe", topic)
-        .option("startingOffsets", "latest")
+        .option("startingOffsets", "earliest")
         .option("maxOffsetsPerTrigger", MAX_OFFSETS[topic])
         .option("failOnDataLoss", "false")
         .option("kafka.fetch.min.bytes", "1")

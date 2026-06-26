@@ -151,6 +151,7 @@ def process_batch(
         if event_time is not None and (st["last_event_time"] is None or event_time >= st["last_event_time"]):
             st["last_event_time"] = event_time
             st["last_event_type"] = event_type
+            st["stuck_emitted"] = False  
         if fac is not None:
             st["current_facility"] = fac
 
