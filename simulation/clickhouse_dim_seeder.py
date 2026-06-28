@@ -28,23 +28,21 @@ def _jsoneachrow(rows: list[dict]) -> bytes:
 def _build_dims(seed: int) -> list[tuple[str, str, str, list[dict]]]:
     """Return (table, columns_ddl, order_by, rows) for each roll-up dimension."""
     cat = build_catalog(seed)
-    region_of_branch = {b["branch_id"]: b["region_id"] for b in cat["dim_branch"]}
 
-    dim_region = [
-        {"region_id": r["region_id"], "region_name": r["region_name"]}
-        for r in cat["dim_region"]
-    ]
-    dim_branch = [
-        {"branch_id": b["branch_id"], "branch_name": b["branch_name"],
-         "region_id": b["region_id"]}
-        for b in cat["dim_branch"]
-    ]
-   
+    region_mapping = {r["region_id"]: r["region_name"] for r in cat["dim_region"]}
+    branch_mapping = { b["branch_id"] : ( b["branch_name"], b["region_id"] ) for b in cat["dim_branch"] }
+
     dim_facility = [
-        {"facility_id": f["facility_id"], "facility_name": f["facility_name"],
-         "facility_type": f["facility_type"], "branch_id": f["branch_id"],
-         "region_id": region_of_branch.get(f["branch_id"], "UNKNOWN"),
-         "province_id": f["province_id"], "capacity_per_day": f["capacity_per_day"]}
+        {
+            "facility_id": f["facility_id"], "facility_name": f["facility_name"],
+            "facility_type": f["facility_type"], 
+            "branch_id": f["branch_id"],
+            "branch_name": branch_mapping.get(f["branch_id"], ("UNKNOWN", "UNKNOWN"))[0],
+            "region_id": branch_mapping.get(f["branch_id"], ("UNKNOWN", "UNKNOWN"))[1],
+            "region_name": region_mapping.get(branch_mapping.get(f["branch_id"], ("UNKNOWN", "UNKNOWN"))[1], "UNKNOWN"),
+            "province_id": f["province_id"], 
+            "capacity_per_day": f["capacity_per_day"]
+        }
         for f in cat["dim_facility"]
     ]
     dim_partner = [
@@ -59,16 +57,10 @@ def _build_dims(seed: int) -> list[tuple[str, str, str, list[dict]]]:
     ]
 
     return [
-        ("dim_region",
-         "region_id String, region_name String",
-         "region_id", dim_region),
-        ("dim_branch",
-         "branch_id String, branch_name String, region_id String",
-         "branch_id", dim_branch),
         ("dim_facility",
          "facility_id String, facility_name String, facility_type String, "
-         "branch_id String, region_id String, province_id String, "
-         "capacity_per_day UInt32",
+         "branch_id String, branch_name String, region_id String, region_name String, "
+         "province_id String, capacity_per_day UInt32",
          "facility_id", dim_facility),
         ("dim_partner",
          "partner_id String, partner_name String, partner_type String",
