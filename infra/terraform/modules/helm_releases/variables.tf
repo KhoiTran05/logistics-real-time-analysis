@@ -18,6 +18,15 @@ variable "artifacts_bucket_name" {
   type = string
 }
 
+variable "logs_bucket_name" {
+  type = string
+}
+
+variable "spark_image" {
+  description = "Spark runtime image used by Airflow-rendered batch SparkApplications"
+  type        = string
+}
+
 variable "spark_irsa_role_arn" {
   type = string
 }

@@ -94,6 +94,44 @@ resource "kubernetes_role_binding" "spark_driver" {
   }
 }
 
+# Lets the Airflow SA submit/watch SparkApplications (and read driver pod logs) in the
+# `spark` namespace via SparkKubernetesOperator.
+resource "kubernetes_role" "airflow_spark_submit" {
+  metadata {
+    name      = "airflow-spark-submit"
+    namespace = "spark"
+  }
+  rule {
+    api_groups = ["sparkoperator.k8s.io"]
+    resources  = ["sparkapplications", "sparkapplications/status"]
+    verbs      = ["get", "list", "watch", "create", "update", "patch", "delete"]
+  }
+  rule {
+    api_groups = [""]
+    resources  = ["pods", "pods/log"]
+    verbs      = ["get", "list", "watch"]
+  }
+  depends_on = [kubernetes_namespace.namespaces]
+}
+
+resource "kubernetes_role_binding" "airflow_spark_submit" {
+  metadata {
+    name      = "airflow-spark-submit"
+    namespace = "spark"
+  }
+  role_ref {
+    api_group = "rbac.authorization.k8s.io"
+    kind      = "Role"
+    name      = kubernetes_role.airflow_spark_submit.metadata[0].name
+  }
+  subject {
+    kind      = "ServiceAccount"
+    name      = "airflow"
+    namespace = "airflow"
+  }
+  depends_on = [helm_release.airflow]
+}
+
 # ── Spark Operator ────────────────────────────────────────────────────────────
 
 resource "helm_release" "spark_operator" {
@@ -440,6 +478,18 @@ resource "helm_release" "airflow" {
       {
         name  = "S3_ICEBERG_BUCKET"
         value = var.iceberg_bucket_name
+      },
+      {
+        name  = "S3_CHECKPOINTS_BUCKET"
+        value = var.checkpoints_bucket_name
+      },
+      {
+        name  = "S3_LOGS_BUCKET"
+        value = var.logs_bucket_name
+      },
+      {
+        name  = "SPARK_IMAGE"
+        value = var.spark_image
       },
       {
         name  = "AWS_REGION"

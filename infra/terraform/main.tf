@@ -120,6 +120,8 @@ module "helm_releases" {
   iceberg_bucket_name              = module.s3.iceberg_bucket_name
   checkpoints_bucket_name          = module.s3.checkpoints_bucket_name
   artifacts_bucket_name            = module.s3.artifacts_bucket_name
+  logs_bucket_name                 = module.s3.logs_bucket_name
+  spark_image                      = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/${local.name_prefix}/spark:3.5.1"
   spark_irsa_role_arn              = module.irsa.spark_role_arn
   airflow_irsa_role_arn            = module.irsa.airflow_role_arn
   cluster_autoscaler_irsa_role_arn = module.irsa.cluster_autoscaler_role_arn
