@@ -29,7 +29,6 @@ def _spark_task(dag: DAG, task_id: str, job_name: str) -> SparkKubernetesOperato
         namespace="spark",
         application_file=render(job_name),
         kubernetes_conn_id="kubernetes_default",
-        watch=True,
         get_logs=True,
         delete_on_termination=True,
         dag=dag,

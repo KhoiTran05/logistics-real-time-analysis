@@ -74,7 +74,7 @@ ExecStartPre=/bin/bash -c 'KAFKA_BOOTSTRAP=$(. /opt/kafka-producer.env; echo $KA
       --query "Reservations[0].Instances[0].PrivateIpAddress" --output text); \
     sed -i "s|^KAFKA_BOOTSTRAP=.*|KAFKA_BOOTSTRAP=$NODE_IP:$KAFKA_NODEPORT|" /opt/kafka-producer.env; \
   fi'
-ExecStart=/usr/bin/python3 /opt/simulation/event_generator.py --rate ${generator_rate} --duration 0
+ExecStart=/usr/bin/python3 /opt/simulation/event_generator.py --rate ${generator_rate} --duration 600
 Restart=on-failure
 RestartSec=30
 

@@ -35,6 +35,6 @@ ADD https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/1.12.262/aw
 
 RUN chmod 644 /opt/spark/jars/*.jar && \
     pip install --no-cache-dir pyyaml==6.0.2 boto3 pandas==2.0.3 pyarrow==15.0.2 \
-        great-expectations==0.18.19
+        "notebook<7" great-expectations==0.18.19
 
 USER spark

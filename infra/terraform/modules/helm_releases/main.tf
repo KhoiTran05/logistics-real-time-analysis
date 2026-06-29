@@ -418,6 +418,17 @@ resource "helm_release" "airflow" {
       replicas     = 1
       resources    = { requests = { cpu = "300m", memory = "512Mi" }, limits = { cpu = "1", memory = "1Gi" } }
       nodeSelector = { "node-type" = "general" }
+
+      # The apache-airflow chart has no global serviceAccount — each component
+      # creates its own (airflow-scheduler, airflow-webserver, …). Under
+      # LocalExecutor the scheduler both parses DAGs and runs the tasks, so it is
+      # the pod that needs the `airflow` SA: IRSA (S3 read for render()) and the
+      # airflow-spark-submit RoleBinding both target `serviceaccount:airflow:airflow`.
+      serviceAccount = {
+        create      = true
+        name        = "airflow"
+        annotations = { "eks.amazonaws.com/role-arn" = var.airflow_irsa_role_arn }
+      }
     }
 
     webserver = {
@@ -441,12 +452,6 @@ resource "helm_release" "airflow" {
     triggerer = { enabled = false }
     flower    = { enabled = false }
     statsd    = { enabled = false }
-
-    serviceAccount = {
-      create      = true
-      name        = "airflow"
-      annotations = { "eks.amazonaws.com/role-arn" = var.airflow_irsa_role_arn }
-    }
 
     dags = {
       persistence = { enabled = false }
