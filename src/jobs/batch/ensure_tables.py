@@ -11,6 +11,7 @@ GOLD_DB = os.environ.get("GOLD_DATABASE", "vdt_logistics_dev_gold")
 
 def ensure_fact_tables(spark: SparkSession, database: str):
     spark.sql(f"CREATE DATABASE IF NOT EXISTS {CATALOG}.{database}")
+    spark.sql(f"USE {CATALOG}.{database}")
 
     spark.sql(
         """
@@ -80,15 +81,15 @@ def ensure_fact_tables(spark: SparkSession, database: str):
     spark.sql(
         """
         CREATE TABLE IF NOT EXISTS fact_shipment_route (
+            event_id string,
             shipment_id string,
-            date_id string,
+            date_id int,
             facility_id string,
             route_id string,
             shipper_id string,
             sequence_no int,
             event_type string,
-            event_time timestamp,
-            status_before string
+            event_time timestamp
         )
         USING iceberg
         PARTITIONED BY (days(event_time))
@@ -109,9 +110,9 @@ def ensure_fact_tables(spark: SparkSession, database: str):
             date_id int,
             attempt_ts timestamp,
             result string,
-            failure_reason_code stringm
-            failure_reason_detail stringm
-            cod_collected_vnd int
+            failure_reason_code string,
+            failure_reason_detail string,
+            cod_collected_vnd bigint
         )
         USING iceberg
         PARTITIONED BY (days(attempt_ts))
@@ -121,7 +122,7 @@ def ensure_fact_tables(spark: SparkSession, database: str):
         );
     """
     )
-    
+
     spark.sql(
         """
         CREATE TABLE IF NOT EXISTS fact_hub_inventory (
@@ -129,7 +130,6 @@ def ensure_fact_tables(spark: SparkSession, database: str):
             snapshot_ts timestamp,
             facility_id string,
             total_shipments int,
-            overdue_shipments int,
             capacity_utilization_pct decimal(5,2)
         )
         USING iceberg
@@ -143,16 +143,17 @@ def ensure_fact_tables(spark: SparkSession, database: str):
 
     spark.sql(
         """
-        CREATE TABLE IF NOT EXISTS fact_financial_transaction(
+        CREATE TABLE IF NOT EXISTS fact_financial_transaction (
+            event_id string,
             shipment_id string,
-            transaction_ts timestamp
+            transaction_ts timestamp,
             facility_id string,
             branch_id string,
             partner_id string,
             service_type_id string,
             revenue_type string,
-            revenue_amount_vnd int,
-            cod_amount_vnd intm
+            revenue_amount_vnd bigint,
+            cod_amount_vnd bigint,
             collected_at timestamp
         )
         USING iceberg
@@ -165,7 +166,8 @@ def ensure_fact_tables(spark: SparkSession, database: str):
     )
 
 if __name__ == "__main__":
-    spark = build_spark(CATALOG)
+    warehouse = f"s3a://{os.environ['ICEBERG_BUCKET']}/warehouse/"
+    spark = build_spark(warehouse)
 
     try:
         ensure_fact_tables(spark, GOLD_DB)

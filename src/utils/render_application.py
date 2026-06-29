@@ -52,6 +52,7 @@ def render_application(
     spark_image: str,
     iceberg_bucket: str,
     checkpoints_bucket: str,
+    logs_bucket: str | None = None,
 ):
     template_path = _get_file_path(app_template_path)
     with template_path.open("r", encoding="utf-8") as f:
@@ -72,7 +73,9 @@ def render_application(
         "ICEBERG_BUCKET": iceberg_bucket,
         "CHECKPOINTS_BUCKET": checkpoints_bucket,
     }
-    
+    if logs_bucket:
+        context["LOGS_BUCKET"] = logs_bucket
+
 
     application = _render_value(template, context)
     application["spec"]["arguments"] = job_config.get("arguments", [])
@@ -102,6 +105,7 @@ if __name__ == "__main__":
     parser.add_argument("--spark_image")
     parser.add_argument("--iceberg_bucket")
     parser.add_argument("--checkpoints_bucket")
+    parser.add_argument("--logs_bucket")
 
     args = parser.parse_args()
 
@@ -113,6 +117,7 @@ if __name__ == "__main__":
         args.spark_image,
         args.iceberg_bucket,
         args.checkpoints_bucket,
+        args.logs_bucket,
     )
         
 
