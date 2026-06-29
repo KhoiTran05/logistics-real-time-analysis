@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
+import yaml
 from airflow import DAG
 from airflow.providers.cncf.kubernetes.operators.spark_kubernetes import (
     SparkKubernetesOperator,
@@ -27,7 +28,7 @@ def _spark_task(dag: DAG, task_id: str, job_name: str) -> SparkKubernetesOperato
     return SparkKubernetesOperator(
         task_id=task_id,
         namespace="spark",
-        application_file=render(job_name),
+        template_spec=yaml.safe_load(render(job_name)),
         kubernetes_conn_id="kubernetes_default",
         get_logs=True,
         delete_on_termination=True,
