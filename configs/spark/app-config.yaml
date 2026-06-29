@@ -52,3 +52,52 @@ jobs:
       cores: 1
       instances: 2
       memory: 3g
+      
+  - name: batch_ensure_tables
+    application_name: batch-ensure-tables
+    application_file: s3a://vdt-logistics-dev-artifacts-747452892492/src/jobs/batch/ensure_tables.py
+    py_files:
+      - s3a://vdt-logistics-dev-artifacts-747452892492/src.zip
+    driver:
+      cores: 1
+      memory: 1g
+    executor:
+      cores: 1
+      instances: 1
+      memory: 1536m
+
+  - name: silver_build
+    application_name: silver-build
+    application_file: s3a://vdt-logistics-dev-artifacts-747452892492/src/jobs/batch/silver_build.py
+    py_files:
+      - s3a://vdt-logistics-dev-artifacts-747452892492/src.zip
+    arguments:
+      - --run-start
+      - "{RUN_START}"
+      - --run-end
+      - "{RUN_END}"
+    driver:
+      cores: 1
+      memory: 2g
+    executor:
+      cores: 1
+      instances: 2
+      memory: 3g
+
+  - name: gold_build
+    application_name: gold-build
+    application_file: s3a://vdt-logistics-dev-artifacts-747452892492/src/jobs/batch/gold_build.py
+    py_files:
+      - s3a://vdt-logistics-dev-artifacts-747452892492/src.zip
+    arguments:
+      - --run-start
+      - "{RUN_START}"
+      - --run-end
+      - "{RUN_END}"
+    driver:
+      cores: 1
+      memory: 2g
+    executor:
+      cores: 1
+      instances: 2
+      memory: 3g
