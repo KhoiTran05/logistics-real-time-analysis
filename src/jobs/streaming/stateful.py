@@ -62,6 +62,7 @@ STATE_SCHEMA = StructType([
     StructField("speed_tier", StringType()),
     StructField("sla_committed_date", StringType()),
     StructField("stuck_emitted", BooleanType()),
+    StructField("terminated", BooleanType()),
 ])
 
 OUTPUT_SCHEMA = StructType([

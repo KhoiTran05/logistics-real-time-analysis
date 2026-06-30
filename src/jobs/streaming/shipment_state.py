@@ -8,6 +8,7 @@ STUCK_TIMEOUT_S = int(os.environ.get("STUCK_TIMEOUT_S", "43"))
 LOST_TIMEOUT_S = int(os.environ.get("LOST_TIMEOUT_S", "130"))
 HUB_DWELL_EXPRESS_S = int(os.environ.get("HUB_DWELL_EXPRESS_S", "14"))
 HUB_DWELL_STANDARD_S = int(os.environ.get("HUB_DWELL_STANDARD_S", "43"))
+TOMBSTONE_TTL_S = int(os.environ.get("TOMBSTONE_TTL_S", "60"))
 
 TERMINAL_EVENTS = {"delivered", "returned_to_sender"}
 EXPRESS_TIERS = {"EXPRESS", "SAMEDAY"}
@@ -16,7 +17,7 @@ STATE_FIELDS = [
     "created_at", "picked_up_at", "origin_po_arrived_at", "origin_po_departed_at",
     "last_dispatch_at", "current_hub_id", "current_hub_arrived_at", "total_hub_dwell_s",
     "last_event_time", "last_event_type", "current_facility", "failure_count",
-    "max_attempt_no", "speed_tier", "sla_committed_date", "stuck_emitted",
+    "max_attempt_no", "speed_tier", "sla_committed_date", "stuck_emitted", "terminated",
 ]
 
 OUTPUT_FIELDS = [
@@ -38,7 +39,8 @@ EVENT_FIELDS = [
 
 def _init_state() -> dict:
     st = {f: None for f in STATE_FIELDS}
-    st.update(total_hub_dwell_s=0.0, failure_count=0, max_attempt_no=0, stuck_emitted=False)
+    st.update(total_hub_dwell_s=0.0, failure_count=0, max_attempt_no=0,
+              stuck_emitted=False, terminated=False)
     return st
 
 
@@ -117,6 +119,8 @@ def process_batch(
 
     if timed_out:
         st = state
+        if st["terminated"]:
+            return rows, None, None 
         last = st["last_event_time"] or 0
         fac = st["current_facility"]
         if not st["stuck_emitted"]:
@@ -131,6 +135,9 @@ def process_batch(
                  f"no event for >{LOST_TIMEOUT_S}s; last={st['last_event_type']}", at)
         _status_row(rows, sid, "LOST", fac, at)
         return rows, None, None
+
+    if state is not None and state["terminated"]:
+        return rows, state, None  
 
     st = state if state is not None else _init_state()
     events = sorted(
@@ -204,7 +211,8 @@ def process_batch(
 
     if terminal is not None:
         rows.append(_completed_row(sid, st, terminal[0], terminal[1]))
-        return rows, None, None
+        st["terminated"] = True
+        return rows, st, (terminal[1] or 0) + TOMBSTONE_TTL_S * 1000
 
     _status_row(rows, sid, "IN_PROCESS", st["current_facility"], st["last_event_time"])
     target = (st["last_event_time"] or 0) + (

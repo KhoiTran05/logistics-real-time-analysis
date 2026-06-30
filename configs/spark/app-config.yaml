@@ -34,7 +34,8 @@ jobs:
       - s3a://vdt-logistics-dev-artifacts-747452892492/src.zip
     driver:
       cores: 1
-      memory: 2g
+      memory: 3g
+      memoryOverhead: 2g
       env:
         - name: WM_SHIPMENT
           value: "60 seconds"
