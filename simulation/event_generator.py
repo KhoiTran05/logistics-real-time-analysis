@@ -332,7 +332,7 @@ def run(producer, refs, rnd, rate, duration, scale, late_pct, late_frac_lo, late
                                       ev["key"], ev["type"], event_wall, ev["fields"]))
             next_create += create_interval
 
-        due = float("inf") if not accepting else now
+        due = now
         while heap and heap[0][0] <= due:
             _, _, sid, topic, key, etype, event_wall, fields = heapq.heappop(heap)
             event_dt = datetime.fromtimestamp(event_wall, TZ)
@@ -343,7 +343,7 @@ def run(producer, refs, rnd, rate, duration, scale, late_pct, late_frac_lo, late
                 print(f"[{el:.0f}s] created={created} sent={sent} "
                       f"(~{sent/el:.0f} msg/s) inflight={len(heap)}")
 
-        if not accepting and not heap:
+        if not accepting:
             break
         time.sleep(0.005)
 
@@ -355,7 +355,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--rate", type=float, default=13.0,
                     help="Shipments created per second (each yields ~15 events)")
-    ap.add_argument("--duration", type=int, default=0, help="Seconds to keep creating (0=infinite)")
+    ap.add_argument("--duration", type=int, default=600, help="Seconds to keep creating (0=infinite)")
     ap.add_argument("--time-scale", type=float, default=2000.0,
                     help="Compress lifecycle delays by this factor")
     ap.add_argument("--late-pct", type=float, default=0.05, help="Fraction of late events")
