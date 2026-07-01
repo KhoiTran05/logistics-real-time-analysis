@@ -81,7 +81,10 @@ def render(job_name: str) -> str:
     }
 
     app = _render(template, ctx)
-    app["spec"]["arguments"] = job.get("arguments", [])
+    app["spec"]["arguments"] = [
+        a.replace("{RUN_START}", RUN_START_MACRO).replace("{RUN_END}", RUN_END_MACRO)
+        for a in job.get("arguments", [])
+    ]
 
     driver_override = {k: v for k, v in job.get("driver", {}).items() if k != "env"}
     app["spec"]["driver"].update(driver_override)
@@ -92,6 +95,4 @@ def render(job_name: str) -> str:
     if job.get("py_files"):
         app["spec"].setdefault("deps", {})["pyFiles"] = job["py_files"]
 
-    doc = yaml.safe_dump(app, sort_keys=False)
-
-    return doc.replace("{RUN_START}", RUN_START_MACRO).replace("{RUN_END}", RUN_END_MACRO)
+    return yaml.safe_dump(app, sort_keys=False)
