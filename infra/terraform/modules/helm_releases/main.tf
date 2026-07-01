@@ -106,10 +106,13 @@ resource "kubernetes_role" "airflow_spark_submit" {
     resources  = ["sparkapplications", "sparkapplications/status"]
     verbs      = ["get", "list", "watch", "create", "update", "patch", "delete"]
   }
+  # The SparkKubernetesOperator (KubernetesPodOperator base) adopts the driver pod
+  # the spark-operator creates: it streams logs and patches a tracking label on it,
+  # so `patch`/`delete` are required in addition to read verbs.
   rule {
     api_groups = [""]
     resources  = ["pods", "pods/log"]
-    verbs      = ["get", "list", "watch"]
+    verbs      = ["get", "list", "watch", "patch", "delete"]
   }
   depends_on = [kubernetes_namespace.namespaces]
 }

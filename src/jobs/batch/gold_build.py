@@ -401,7 +401,7 @@ def main() -> None:
     parser.add_argument("--run-start", required=True)
     parser.add_argument("--run-end", required=True)
     args = parser.parse_args()
-
+    logger.info("Starting silver build for [%s, %s)", args.run_start, args.run_end)
     spark = build_spark(common.warehouse_path())
     try:
         build_gold(spark, args.run_start, args.run_end)

@@ -1,10 +1,5 @@
-"""Render a batch SparkApplication manifest for SparkKubernetesOperator.
-
-Self-contained (the Airflow pod only git-syncs `airflow/dags`, it has no `src/`). Mirrors
-`src/utils/render_application.py`: downloads the batch template + job config from the
-artifacts bucket on S3, fills the `{PLACEHOLDER}` fields, and leaves the `{RUN_START}` /
-`{RUN_END}` argument placeholders as Airflow Jinja macros so the operator substitutes the
-data interval per run (→ idempotent, window-scoped batch).
+"""
+Render a batch SparkApplication manifest for SparkKubernetesOperator.
 """
 from __future__ import annotations
 
@@ -16,6 +11,15 @@ import yaml
 
 TEMPLATE_KEY = "configs/spark/batch-app-template.yaml"
 CONFIG_KEY = "configs/spark/app-config.yaml"
+
+RUN_START_MACRO = (
+    "{{ (macros.datetime.utcnow() - macros.timedelta(hours=2)).strftime('%Y-%m-%dT%H:%M:%S+00:00') "
+    "if dag_run.run_type == 'manual' else data_interval_start }}"
+)
+RUN_END_MACRO = (
+    "{{ macros.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S+00:00') "
+    "if dag_run.run_type == 'manual' else data_interval_end }}"
+)
 
 
 class _SafeDict(dict):
@@ -89,7 +93,5 @@ def render(job_name: str) -> str:
         app["spec"].setdefault("deps", {})["pyFiles"] = job["py_files"]
 
     doc = yaml.safe_dump(app, sort_keys=False)
-    
-    return doc.replace("{RUN_START}", "{{ data_interval_start }}").replace(
-        "{RUN_END}", "{{ data_interval_end }}"
-    )
+
+    return doc.replace("{RUN_START}", RUN_START_MACRO).replace("{RUN_END}", RUN_END_MACRO)

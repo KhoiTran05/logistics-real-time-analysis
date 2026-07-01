@@ -70,10 +70,13 @@ def silver_enrich(df: DataFrame, dims: dict[str, DataFrame]) -> DataFrame:
 
 
 def build_silver(spark: SparkSession, start: str, end: str) -> None:
+    logger.info("Starting to build silver table with window [%s, %s)", start, end)
     spark.sql(f"CREATE DATABASE IF NOT EXISTS {common.CATALOG}.{common.SILVER_DB}")
     dims = load_dims(spark, common.DIM_DB)
+    logger.info("Loading dimensions completed")
 
     for topic, events in TOPIC_EVENTS.items():
+        logger.info("Processing topic %s with events %s", topic, events)
         for event_type in events:
             df = common.read_window(spark, common.BRONZE_DB, event_type, start, end)
             if df is None or df.rdd.isEmpty():
@@ -93,6 +96,8 @@ def build_silver(spark: SparkSession, start: str, end: str) -> None:
                 key_cols=["event_id"],
                 partition_col="event_time",
             )
+        logger.info("Processing topic %s completed", topic)
+    logger.info("All topics processed successfully")
 
 
 def main() -> None:
@@ -100,7 +105,7 @@ def main() -> None:
     parser.add_argument("--run-start", required=True, help="window start, ISO8601")
     parser.add_argument("--run-end", required=True, help="window end, ISO8601 (exclusive)")
     args = parser.parse_args()
-
+    logger.info("Starting silver build for [%s, %s)", args.run_start, args.run_end)
     spark = build_spark(common.warehouse_path())
     try:
         build_silver(spark, args.run_start, args.run_end)

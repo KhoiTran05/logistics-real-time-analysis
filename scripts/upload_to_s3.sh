@@ -5,6 +5,9 @@ ARTIFACTS=$(cd infra/terraform && terraform output -raw s3_artifacts_bucket)
 
 aws s3 sync src/ "s3://${ARTIFACTS}/src/" --exclude "__pycache__/*"
 
+# Spark template + job config — Airflow downloads these from S3 to render batch jobs
+aws s3 sync configs/spark/ "s3://${ARTIFACTS}/configs/spark/"
+
 # Package src/ as a zip so Spark can ship it to executors via spec.deps.pyFiles
 rm -f src.zip
 python -c "
