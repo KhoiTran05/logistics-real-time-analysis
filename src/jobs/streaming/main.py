@@ -10,6 +10,7 @@ from src.jobs.streaming.config import (
 )
 from src.jobs.streaming.dims import load_dims
 from src.jobs.streaming.kpi import kpi_batch_writer, start_kpis
+from src.jobs.streaming.metrics import ProgressListener
 from src.jobs.streaming.session import build_spark
 from src.jobs.streaming.source import parse, read_kafka
 from src.jobs.streaming.stateful import build_unified, start_stateful
@@ -30,6 +31,7 @@ def main() -> None:
     )
 
     spark = build_spark(warehouse)
+    spark.streams.addListener(ProgressListener())
     ensure_bronze_tables(spark, bronze_db)
     dims = load_dims(spark, dim_db)
 
@@ -43,6 +45,7 @@ def main() -> None:
             parsed,
             bronze_batch_writer(bronze_db, topic),
             f"{ckpt_root}/bronze/{safe}",
+            f"bronze_{safe}",
         )
         logger.info("Bronze writer started for %s", topic)
 
@@ -50,7 +53,8 @@ def main() -> None:
         start_kpis(
             enriched,
             kpi_batch_writer(topic),
-            f"{ckpt_root}/kpis/{safe}"
+            f"{ckpt_root}/kpis/{safe}",
+            f"kpi_{safe}",
         )
         logger.info("KPI stream started for %s", topic)
 
@@ -66,7 +70,7 @@ def main() -> None:
         for r in dims["dim_service_type"].select("service_type_id", "speed_tier").collect()
     }
     unified = build_unified(cleaned_by_topic)
-    start_stateful(unified, route_dest, speed_tier, f"{ckpt_root}/stateful")
+    start_stateful(unified, route_dest, speed_tier, f"{ckpt_root}/stateful", "stateful")
     logger.info("Unified per-shipment state machine started")
 
     spark.streams.awaitAnyTermination()

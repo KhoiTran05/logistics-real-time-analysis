@@ -24,9 +24,10 @@ def bronze_batch_writer(database: str, topic: str):
     return _write
 
 
-def start_bronze(parsed: DataFrame, writer, checkpoint: str):
+def start_bronze(parsed: DataFrame, writer, checkpoint: str, name: str):
     return (
         parsed.writeStream.outputMode("append")
+        .queryName(name)
         .option("checkpointLocation", checkpoint)
         .foreachBatch(writer)
         .trigger(processingTime=TRIGGER_INTERVAL)

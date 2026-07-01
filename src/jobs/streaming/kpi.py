@@ -200,10 +200,11 @@ def kpi_batch_writer(topic: str):
     return _write
 
 
-def start_kpis(enriched: DataFrame, writer, checkpoint: str):
+def start_kpis(enriched: DataFrame, writer, checkpoint: str, name: str):
 
     return (
         enriched.writeStream.outputMode("append")
+        .queryName(name)
         .option("checkpointLocation", checkpoint)
         .foreachBatch(writer)
         .trigger(processingTime=TRIGGER_INTERVAL)

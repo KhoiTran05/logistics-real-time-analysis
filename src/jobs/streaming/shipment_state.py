@@ -4,8 +4,8 @@ import os
 from datetime import datetime, timezone
 
 # Thresholds
-STUCK_TIMEOUT_S = int(os.environ.get("STUCK_TIMEOUT_S", "43"))
-LOST_TIMEOUT_S = int(os.environ.get("LOST_TIMEOUT_S", "130"))
+STUCK_TIMEOUT_S = int(os.environ.get("STUCK_TIMEOUT_S", "20"))
+LOST_TIMEOUT_S = int(os.environ.get("LOST_TIMEOUT_S", "40"))
 HUB_DWELL_EXPRESS_S = int(os.environ.get("HUB_DWELL_EXPRESS_S", "14"))
 HUB_DWELL_STANDARD_S = int(os.environ.get("HUB_DWELL_STANDARD_S", "43"))
 TOMBSTONE_TTL_S = int(os.environ.get("TOMBSTONE_TTL_S", "60"))

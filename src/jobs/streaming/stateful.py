@@ -209,7 +209,7 @@ def stateful_batch_writer(batch_df: DataFrame, batch_id: int) -> None:
         batch_df.unpersist()
 
 
-def start_stateful(unified: DataFrame, route_dest: dict, speed_tier: dict, checkpoint: str):
+def start_stateful(unified: DataFrame, route_dest: dict, speed_tier: dict, checkpoint: str, name: str):
     stated = unified.groupBy("shipment_id").applyInPandasWithState(
         make_fold(route_dest, speed_tier),
         OUTPUT_SCHEMA,
@@ -219,6 +219,7 @@ def start_stateful(unified: DataFrame, route_dest: dict, speed_tier: dict, check
     )
     return (
         stated.writeStream.outputMode("update")
+        .queryName(name)
         .option("checkpointLocation", checkpoint)
         .foreachBatch(stateful_batch_writer)
         .trigger(processingTime=TRIGGER_INTERVAL)
