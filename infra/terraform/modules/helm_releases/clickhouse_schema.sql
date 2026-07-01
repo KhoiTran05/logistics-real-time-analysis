@@ -240,7 +240,6 @@ SELECT
   d.region_name,
   SUM(k.inbound_count) + SUM(k.outbound_count) AS facility_throughput,
   SUM(k.inbound_count) - SUM(k.outbound_count) AS facility_backlog,
-  -- keep the components so branch/region panels can recompute the rate
   SUM(k.failed_delivery_count) AS failed_delivery_count,
   SUM(k.out_for_delivery_count) AS out_for_delivery_count,
   COALESCE(
@@ -248,7 +247,6 @@ SELECT
     / nullIf(SUM(k.out_for_delivery_count), 0),
     0.0
   ) AS failed_delivery_rate,
-  -- §5 capacity utilization: per-window net backlog vs daily capacity
   COALESCE(
     (SUM(k.inbound_count) - SUM(k.outbound_count))
     / nullIf(d.capacity_per_day, 0) * 100,
@@ -301,7 +299,8 @@ LEFT JOIN (
 ) AS o
   ON r.window_start = o.window_start AND r.window_end = o.window_end;
 
--- STATEFUL KPI VIEWS 
+------ STATEFUL KPI VIEWS ------ 
+
 CREATE VIEW IF NOT EXISTS ${database}.v_shipment_journey AS
 SELECT * FROM ${database}.kpi_shipment_journey FINAL;
 
@@ -342,8 +341,7 @@ SELECT
 FROM ${database}.v_shipment_journey
 WHERE status IN ('DELIVERED', 'RETURNED');
 
--- SLA & quality rates (§4). Rates are over DELIVERED; sla_breach counts all
--- completed shipments (delivered or returned) finishing past SLA.
+-- SLA & quality rates
 CREATE VIEW IF NOT EXISTS ${database}.v_sla_quality AS
 SELECT
   countIf(status = 'DELIVERED') AS delivered_count,
@@ -358,8 +356,8 @@ SELECT
 FROM ${database}.v_shipment_journey
 WHERE status IN ('DELIVERED', 'RETURNED');
 
--- ANOMALY VIEWS
--- Alerts enriched with facility roll-up
+------- ANOMALY VIEWS -------
+
 CREATE VIEW IF NOT EXISTS ${database}.v_anomaly_alerts AS
 SELECT
   a.detected_at,
@@ -381,16 +379,10 @@ SELECT anomaly_type, severity, count() AS alert_count
 FROM ${database}.anomaly_alerts
 GROUP BY anomaly_type, severity;
 
--- ====================================================================
--- LATENCY / FRESHNESS  (event_time -> ClickHouse -> dashboard)
--- ====================================================================
--- pipeline_latency_s = ingested_at (server wall-clock write) - updated_at
--- (event_time of the triggering event). updated_at tracks wall-clock (lifecycle
--- is TIME_SCALE-compressed), so the delta is real seconds. End-to-end "to
--- dashboard" = pipeline_latency_s + (now() - ingested_at); the second term is
--- computed live in Grafana (v_latency_summary.data_age_s). STUCK/LOST rows carry
--- a synthetic future updated_at, so they're excluded.
 
+------- LATENCY / FRESHNESS -------
+
+-- Stateful latency
 CREATE VIEW IF NOT EXISTS ${database}.v_latency_shipment AS
 SELECT
   shipment_id,
@@ -411,3 +403,81 @@ SELECT
   max(ingested_at)                             AS last_ingested_at,
   dateDiff('second', max(ingested_at), now())  AS data_age_s
 FROM ${database}.v_latency_shipment;
+
+-- Stateless latency
+CREATE VIEW IF NOT EXISTS ${database}.v_latency_kpi AS
+SELECT
+  kpi_name,
+  window_start,
+  window_end,
+  last_ingested_at,
+  greatest(0, dateDiff('second', window_end, last_ingested_at)) AS pipeline_latency_s
+FROM (
+  SELECT 'kpi_financial' AS kpi_name, window_start, window_end, max(ingested_at) AS last_ingested_at
+  FROM ${database}.kpi_financial GROUP BY window_start, window_end
+  UNION ALL
+  SELECT 'kpi_order_volume_facility', window_start, window_end, max(ingested_at)
+  FROM ${database}.kpi_order_volume_facility GROUP BY window_start, window_end
+  UNION ALL
+  SELECT 'kpi_order_volume_partner_service', window_start, window_end, max(ingested_at)
+  FROM ${database}.kpi_order_volume_partner_service GROUP BY window_start, window_end
+  UNION ALL
+  SELECT 'kpi_facility_flow', window_start, window_end, max(ingested_at)
+  FROM ${database}.kpi_facility_flow GROUP BY window_start, window_end
+  UNION ALL
+  SELECT 'kpi_failure_reason', window_start, window_end, max(ingested_at)
+  FROM ${database}.kpi_failure_reason GROUP BY window_start, window_end
+  UNION ALL
+  SELECT 'kpi_returns', window_start, window_end, max(ingested_at)
+  FROM ${database}.kpi_returns GROUP BY window_start, window_end
+)
+WHERE window_end < now();
+
+CREATE VIEW IF NOT EXISTS ${database}.v_latency_kpi_summary AS
+SELECT
+  kpi_name,
+  count()                                      AS window_count,
+  round(avg(pipeline_latency_s), 2)            AS avg_latency_s,
+  round(quantile(0.50)(pipeline_latency_s), 2) AS p50_latency_s,
+  round(quantile(0.95)(pipeline_latency_s), 2) AS p95_latency_s,
+  max(pipeline_latency_s)                      AS max_latency_s,
+  max(last_ingested_at)                        AS last_ingested_at,
+  dateDiff('second', max(last_ingested_at), now()) AS data_age_s
+FROM ${database}.v_latency_kpi
+GROUP BY kpi_name;
+
+------ STREAMING QUERY PROGRESS ------
+
+CREATE TABLE IF NOT EXISTS ${database}.streaming_query_progress (
+  event_ts                  DateTime,
+  query_name                String,
+  batch_id                  Int64,
+  num_input_rows            Int64,
+  input_rows_per_second     Float64,
+  processed_rows_per_second Float64,
+  batch_duration_ms         Int64,
+  add_batch_ms              Int64,
+  state_num_rows_total      Int64,
+  state_memory_bytes        Int64,
+  num_dropped_late_rows     Int64,
+  ingested_at               DateTime DEFAULT now()
+) ENGINE = MergeTree
+ORDER BY (query_name, event_ts);
+
+-- Per-stream rollup: throughput, batch latency, state footprint, dropped-late.
+CREATE VIEW IF NOT EXISTS ${database}.v_stream_progress_summary AS
+SELECT
+  query_name,
+  count()                                          AS batch_count,
+  round(avg(processed_rows_per_second), 1)         AS avg_processed_rps,
+  round(quantile(0.50)(processed_rows_per_second), 1) AS p50_processed_rps,
+  round(quantile(0.95)(processed_rows_per_second), 1) AS p95_processed_rps,
+  round(avg(batch_duration_ms), 0)                 AS avg_batch_ms,
+  round(quantile(0.95)(batch_duration_ms), 0)      AS p95_batch_ms,
+  sum(num_input_rows)                              AS total_input_rows,
+  sum(num_dropped_late_rows)                       AS total_dropped_late_rows,
+  max(state_num_rows_total)                        AS max_state_rows,
+  max(state_memory_bytes)                          AS max_state_memory_bytes,
+  max(event_ts)                                    AS last_event_ts
+FROM ${database}.streaming_query_progress
+GROUP BY query_name;

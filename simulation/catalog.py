@@ -189,7 +189,7 @@ def build_catalog(seed: int = SEED) -> dict:
                 "address": f"Số {rnd.randint(1, 300)} đường {rnd.randint(1, 50)}, {name_short}",
                 "latitude": round(rnd.uniform(8.5, 23.0), 6),
                 "longitude": round(rnd.uniform(102.5, 109.5), 6),
-                "capacity_per_day": rnd.choice([1000, 2000, 3000, 5000]),
+                "capacity_per_day": rnd.choice([7, 8, 9, 10]),
                 "is_active": True, "open_time": "07:30:00", "close_time": "21:00:00",
             })
 
@@ -206,7 +206,7 @@ def build_catalog(seed: int = SEED) -> dict:
                 "address": f"KCN {name_short}, lô {h}",
                 "latitude": round(rnd.uniform(8.5, 23.0), 6),
                 "longitude": round(rnd.uniform(102.5, 109.5), 6),
-                "capacity_per_day": rnd.choice([20000, 30000, 50000]),
+                "capacity_per_day": rnd.choice([7, 8, 9, 10]),
                 "is_active": True, "open_time": "00:00:00", "close_time": "23:59:00",
             })
 
